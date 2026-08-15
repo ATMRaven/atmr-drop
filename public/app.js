@@ -100,6 +100,18 @@
   const btnCameraClose = document.getElementById('btn-camera-close');
   let mediaStream = null;
 
+  // --- APP VERSION & UPDATE STATE ---
+  const APP_CURRENT_VERSION = '1.0.6';
+  let isUpdateMandatory = false;
+
+  const updateModal = document.getElementById('update-modal');
+  const updateModalOverlay = document.getElementById('update-modal-overlay');
+  const updateTitle = document.getElementById('update-title');
+  const updateDesc = document.getElementById('update-desc');
+  const updateNotesText = document.getElementById('update-notes-text');
+  const btnUpdateNow = document.getElementById('btn-update-now');
+  const btnUpdateLater = document.getElementById('btn-update-later');
+
   // --- INITIALIZATION ---
   function init() {
     setupTabs();
@@ -107,7 +119,85 @@
     setupDropzone();
     setupCamera();
     setupActions();
+    setupUpdateModal();
     checkDirectPinRoute();
+    checkAppUpdate();
+  }
+
+  // --- IN-APP UPDATE CHECKER ---
+  async function checkAppUpdate() {
+    try {
+      // Check Worker version API first
+      let data = null;
+      try {
+        const res = await fetch('/api/version');
+        if (res.ok) data = await res.json();
+      } catch (e) {}
+
+      // Fallback to GitHub Releases API if backend endpoint is unavailable
+      if (!data || !data.version) {
+        const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest');
+        if (ghRes.ok) {
+          const ghData = await ghRes.json();
+          const tag = (ghData.tag_name || '').replace(/^v/, '');
+          data = {
+            version: tag,
+            downloadUrl: ghData.assets?.[0]?.browser_download_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
+            releaseNotes: ghData.body || 'Latest performance and security improvements.',
+            mandatory: false
+          };
+        }
+      }
+
+      if (data && data.version && isNewerVersion(data.version, APP_CURRENT_VERSION)) {
+        displayUpdateModal(data);
+      }
+    } catch (err) {
+      console.warn('Update check failed (offline or rate limited):', err);
+    }
+  }
+
+  function isNewerVersion(remote, local) {
+    const rParts = remote.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    const lParts = local.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(rParts.length, lParts.length); i++) {
+      const r = rParts[i] || 0;
+      const l = lParts[i] || 0;
+      if (r > l) return true;
+      if (r < l) return false;
+    }
+    return false;
+  }
+
+  function displayUpdateModal(info) {
+    isUpdateMandatory = !!info.mandatory;
+    updateTitle.textContent = `Update Available (v${info.version})`;
+    updateDesc.textContent = info.mandatory
+      ? 'A critical update is required to continue.'
+      : 'A new version of Drop is ready to install.';
+    updateNotesText.textContent = info.releaseNotes || 'Bug fixes and performance enhancements.';
+    btnUpdateNow.href = info.downloadUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
+
+    if (info.mandatory) {
+      btnUpdateLater.classList.add('hidden');
+    } else {
+      btnUpdateLater.classList.remove('hidden');
+    }
+
+    updateModal.classList.add('active');
+    playChime('copy');
+  }
+
+  function setupUpdateModal() {
+    btnUpdateLater.addEventListener('click', () => {
+      updateModal.classList.remove('active');
+    });
+
+    updateModalOverlay.addEventListener('click', () => {
+      if (!isUpdateMandatory) {
+        updateModal.classList.remove('active');
+      }
+    });
   }
 
   // --- TAB NAVIGATION ---

@@ -246,6 +246,34 @@
     </div>
   </div>
 
+  <!-- In-App Update Modal -->
+  <div id="update-modal" class="clean-modal" aria-hidden="true">
+    <div class="modal-overlay" id="update-modal-overlay"></div>
+    <div class="modal-card update-modal-card">
+      <div class="update-header-glow">
+        <div class="update-icon-circle">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        </div>
+      </div>
+      <div class="update-text-center">
+        <h3 class="update-heading" id="update-title">Update Available</h3>
+        <p class="update-sub" id="update-desc">A newer version of Drop is available.</p>
+      </div>
+      <div class="update-notes-container" id="update-notes-box">
+        <span class="update-notes-label">What's New:</span>
+        <p id="update-notes-text" class="update-notes-body"></p>
+      </div>
+      <div class="update-actions-stack">
+        <a id="btn-update-now" href="https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk" target="_blank" class="btn-primary full-width">
+          Update Now
+        </a>
+        <button type="button" id="btn-update-later" class="btn-ghost full-width">
+          Later
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast notifications -->
   <div id="toast-container" class="toast-shelf"></div>
 

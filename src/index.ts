@@ -81,6 +81,17 @@ export default {
       return handleDeleteDrop(code, env);
     }
 
+    // Version check endpoint
+    if (pathname === '/api/version') {
+      return jsonResponse({
+        version: '1.0.6',
+        downloadUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
+        releasePage: 'https://github.com/ATMRaven/atmr-drop/releases/latest',
+        mandatory: false,
+        releaseNotes: 'Flagship Apple Pro aesthetic, permanent cryptographic signing, and automated in-app update checker.',
+      });
+    }
+
     // API Index / Discovery endpoint
     if (pathname === '/api' || pathname === '/api/') {
       return jsonResponse({

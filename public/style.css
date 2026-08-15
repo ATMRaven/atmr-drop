@@ -981,6 +981,82 @@ html, body {
 }
 
 /* --------------------------------------------------------------------------
+   IN-APP UPDATE MODAL
+   -------------------------------------------------------------------------- */
+.update-modal-card {
+  text-align: center;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.update-header-glow {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+
+.update-text-center {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.update-heading {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-pure);
+}
+
+.update-sub {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.update-notes-container {
+  width: 100%;
+  background: var(--input-glass);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-input);
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin: 4px 0 8px 0;
+}
+
+.update-notes-label {
+  font-weight: 600;
+  color: #38bdf8;
+  display: block;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+}
+
+.update-notes-body {
+  color: var(--text-primary);
+}
+
+.update-actions-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* --------------------------------------------------------------------------
    TOAST SHELF
    -------------------------------------------------------------------------- */
 .toast-shelf {
