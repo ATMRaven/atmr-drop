@@ -34,5 +34,6 @@ export interface CreateDropRequest {
 
 export interface Env {
   ATMR_DROP_KV: KVNamespace;
+  ATMR_DROP_R2?: R2Bucket;
   ASSETS?: Fetcher;
 }

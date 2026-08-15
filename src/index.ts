@@ -152,31 +152,43 @@ async function handleCreateDrop(request: Request, env: Env): Promise<Response> {
     const expiresAt = now + ttlSeconds * 1000;
     const fileEntries: FileEntry[] = [];
 
-    // Store files in KV with TTL
-    if (Array.isArray(body.files) && body.files.length > 0) {
-      for (const file of body.files) {
-        const fileId = generateId();
-        const kvKey = `file:${code}:${fileId}`;
-        const binaryData = base64ToUint8Array(file.dataBase64);
+    // Store files into R2 if available, or KV as fallback
+    for (const f of body.files || []) {
+      const fileId = generateId();
+      const fileBytes = base64ToUint8Array(f.dataBase64);
+      const kvKey = `file:${code}:${fileId}`;
+      const r2Key = `drops/${code}/${fileId}`;
 
-        // Store file binary in KV with exact expiration TTL
-        await env.ATMR_DROP_KV.put(kvKey, binaryData, {
-          expirationTtl: ttlSeconds,
-          metadata: {
-            name: file.name,
-            type: file.type || 'application/octet-stream',
-            size: file.size || binaryData.length,
+      if (env.ATMR_DROP_R2) {
+        // Stream directly to R2
+        await env.ATMR_DROP_R2.put(r2Key, fileBytes, {
+          httpMetadata: {
+            contentType: f.type || 'application/octet-stream',
+          },
+          customMetadata: {
+            name: f.name,
+            size: f.size.toString(),
           },
         });
-
-        fileEntries.push({
-          id: fileId,
-          name: file.name,
-          size: file.size || binaryData.length,
-          type: file.type || 'application/octet-stream',
-          kvKey,
+      } else {
+        // Store in KV
+        await env.ATMR_DROP_KV.put(kvKey, fileBytes, {
+          expirationTtl: ttlSeconds,
+          metadata: {
+            name: f.name,
+            type: f.type || 'application/octet-stream',
+            size: f.size,
+          },
         });
       }
+
+      fileEntries.push({
+        id: fileId,
+        name: f.name,
+        size: f.size,
+        type: f.type || 'application/octet-stream',
+        kvKey,
+      });
     }
 
     const metadata: DropMetadata = {
@@ -186,7 +198,7 @@ async function handleCreateDrop(request: Request, env: Env): Promise<Response> {
       ttlSeconds,
       burnAfterRead,
       retrievedCount: 0,
-      text: body.text || undefined,
+      text: body.text,
       textType: body.textType || 'plain',
       files: fileEntries,
       creator: 'atmr',
@@ -257,14 +269,39 @@ async function handleGetDrop(code: string, isPeek: boolean, env: Env): Promise<R
   }
 }
 
-// Handler: Stream File
+// Handler: Stream File (R2 or KV)
 async function handleGetFile(code: string, fileId: string, isDownload: boolean, env: Env): Promise<Response> {
   try {
     if (!code || !fileId) {
       return jsonResponse({ error: 'Missing code or file ID' }, 400);
     }
 
+    const r2Key = `drops/${code}/${fileId}`;
     const kvKey = `file:${code}:${fileId}`;
+
+    // Try R2 first
+    if (env.ATMR_DROP_R2) {
+      const r2Object = await env.ATMR_DROP_R2.get(r2Key);
+      if (r2Object) {
+        const meta = r2Object.customMetadata || {};
+        const filename = encodeURIComponent(meta.name || `file-${fileId}`);
+        const contentType = r2Object.httpMetadata?.contentType || 'application/octet-stream';
+        const dispositionType = isDownload ? 'attachment' : 'inline';
+
+        return new Response(r2Object.body, {
+          status: 200,
+          headers: {
+            'Content-Type': contentType,
+            'Content-Disposition': `${dispositionType}; filename="${filename}"; filename*=UTF-8''${filename}`,
+            'Content-Length': r2Object.size.toString(),
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            ...corsHeaders,
+          },
+        });
+      }
+    }
+
+    // Fallback to KV
     const fileResult = await env.ATMR_DROP_KV.getWithMetadata<{ name: string; type: string; size: number }>(kvKey, {
       type: 'arrayBuffer',
     });
@@ -300,6 +337,9 @@ async function handleDeleteDrop(code: string, env: Env): Promise<Response> {
     if (raw) {
       const drop: DropMetadata = JSON.parse(raw);
       for (const file of drop.files) {
+        if (env.ATMR_DROP_R2) {
+          await env.ATMR_DROP_R2.delete(`drops/${code}/${file.id}`);
+        }
         await env.ATMR_DROP_KV.delete(file.kvKey);
       }
     }
