@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "capacity-planning": {
+      "source": "aj-geddes/useful-ai-prompts",
+      "sourceType": "github",
+      "skillPath": "skills/capacity-planning/SKILL.md",
+      "computedHash": "6b2ccbe5ee89aa0516965bb172c11f2eaefb372fe0689c17fbe5a31aae6d6db8"
+    }
+  }
+}

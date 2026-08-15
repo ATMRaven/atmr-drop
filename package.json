@@ -1,0 +1,37 @@
+{
+  "name": "atmr-drop",
+  "version": "1.0.0",
+  "description": "Ultra-fast cross-device text, image, and file drop web app on Cloudflare Worker + KV + R2",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "cap:sync": "cap sync android"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "file-sharing",
+    "airdrop",
+    "p2p",
+    "webrtc",
+    "ephemeral"
+  ],
+  "author": "atmr",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260811.1",
+    "jszip": "^3.10.1",
+    "puppeteer": "^25.7.0",
+    "qrcode": "^1.5.4",
+    "qrcode-generator": "^2.0.4",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.123.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0"
+  }
+}

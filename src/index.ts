@@ -1,0 +1,311 @@
+import { DropMetadata, FileEntry, CreateDropRequest, Env } from './types';
+
+// Helper to generate a 4-digit numeric PIN or 4-char alphanumeric
+function generatePin(length = 4): string {
+  const digits = '0123456789';
+  let pin = '';
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  for (let i = 0; i < length; i++) {
+    pin += digits[array[i] % digits.length];
+  }
+  return pin;
+}
+
+// Generate unique ID
+function generateId(): string {
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+}
+
+// Convert base64 data URL or raw base64 to Uint8Array
+function base64ToUint8Array(base64Str: string): Uint8Array {
+  const cleanBase64 = base64Str.includes(',') ? base64Str.split(',')[1] : base64Str;
+  const binaryString = atob(cleanBase64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+// CORS headers
+const corsHeaders: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Requested-With, X-Action',
+};
+
+function jsonResponse(data: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...corsHeaders,
+      ...extraHeaders,
+    },
+  });
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+    const pathname = url.pathname;
+
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
+
+    // API Routes
+    if (pathname === '/api/drop' && request.method === 'POST') {
+      return handleCreateDrop(request, env);
+    }
+
+    if (pathname.startsWith('/api/drop/') && request.method === 'GET') {
+      const code = pathname.replace('/api/drop/', '').trim().toUpperCase();
+      const isPeek = url.searchParams.get('peek') === 'true';
+      return handleGetDrop(code, isPeek, env);
+    }
+
+    if (pathname.startsWith('/api/file/') && request.method === 'GET') {
+      const parts = pathname.replace('/api/file/', '').split('/');
+      const code = parts[0]?.trim().toUpperCase();
+      const fileId = parts[1]?.trim();
+      const isDownload = url.searchParams.get('download') === 'true';
+      return handleGetFile(code, fileId, isDownload, env);
+    }
+
+    if (pathname.startsWith('/api/drop/') && request.method === 'DELETE') {
+      const code = pathname.replace('/api/drop/', '').trim().toUpperCase();
+      return handleDeleteDrop(code, env);
+    }
+
+    // API Index / Discovery endpoint
+    if (pathname === '/api' || pathname === '/api/') {
+      return jsonResponse({
+        service: 'THE DAILY DROP API',
+        version: '1.0.0',
+        creator: 'atmr',
+        endpoints: {
+          'POST /api/drop': 'Create a new encrypted wire drop (text, files, dynamic TTL 60-86400s, burnAfterRead)',
+          'GET /api/drop/:code': 'Retrieve drop metadata and active files manifest by 4-digit PIN code',
+          'GET /api/file/:code/:fileId': 'Stream or download individual file attachment binary',
+          'DELETE /api/drop/:code': 'Manually delete drop from KV before expiry',
+          'GET /api/health': 'Health check status',
+        },
+        directRoutePattern: 'https://drop.atmr.workers.dev/:pin',
+      });
+    }
+
+    // Health check endpoint
+    if (pathname === '/api/health') {
+      return jsonResponse({ status: 'ok', app: 'atmr-drop', creator: 'atmr', timestamp: Date.now() });
+    }
+
+    // Check if the route is a direct drop link like /1234 or /7890
+    const codeMatch = pathname.match(/^\/([a-zA-Z0-9]{4,8})$/);
+    if (codeMatch && env.ASSETS) {
+      // Serve the SPA root page so client-side routing receives the drop code from window.location.pathname
+      const indexReq = new Request(new URL('/', request.url), request);
+      return env.ASSETS.fetch(indexReq);
+    }
+
+    // Fallback to static assets
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+
+    return new Response('atmr-drop worker active. Assets binding not found.', { status: 200 });
+  },
+};
+
+// Handler: Create Drop
+async function handleCreateDrop(request: Request, env: Env): Promise<Response> {
+  try {
+    const body = (await request.json()) as CreateDropRequest;
+
+    const rawTtl = typeof body.ttlSeconds === 'number' ? body.ttlSeconds : 600;
+    // Bound TTL between 60s (1 min) and 86400s (24 hours)
+    const ttlSeconds = Math.max(60, Math.min(86400, Math.floor(rawTtl)));
+    const burnAfterRead = Boolean(body.burnAfterRead);
+
+    // Find an available unique 4-digit PIN
+    let code = '';
+    let attempts = 0;
+    while (attempts < 10) {
+      const candidate = generatePin(4);
+      const existing = await env.ATMR_DROP_KV.get(`drop:${candidate}`);
+      if (!existing) {
+        code = candidate;
+        break;
+      }
+      attempts++;
+    }
+
+    if (!code) {
+      // Fallback to 5-digit PIN
+      code = generatePin(5);
+    }
+
+    const now = Date.now();
+    const expiresAt = now + ttlSeconds * 1000;
+    const fileEntries: FileEntry[] = [];
+
+    // Store files in KV with TTL
+    if (Array.isArray(body.files) && body.files.length > 0) {
+      for (const file of body.files) {
+        const fileId = generateId();
+        const kvKey = `file:${code}:${fileId}`;
+        const binaryData = base64ToUint8Array(file.dataBase64);
+
+        // Store file binary in KV with exact expiration TTL
+        await env.ATMR_DROP_KV.put(kvKey, binaryData, {
+          expirationTtl: ttlSeconds,
+          metadata: {
+            name: file.name,
+            type: file.type || 'application/octet-stream',
+            size: file.size || binaryData.length,
+          },
+        });
+
+        fileEntries.push({
+          id: fileId,
+          name: file.name,
+          size: file.size || binaryData.length,
+          type: file.type || 'application/octet-stream',
+          kvKey,
+        });
+      }
+    }
+
+    const metadata: DropMetadata = {
+      code,
+      createdAt: now,
+      expiresAt,
+      ttlSeconds,
+      burnAfterRead,
+      retrievedCount: 0,
+      text: body.text || undefined,
+      textType: body.textType || 'plain',
+      files: fileEntries,
+      creator: 'atmr',
+    };
+
+    // Save drop metadata in KV with exact expiration TTL
+    await env.ATMR_DROP_KV.put(`drop:${code}`, JSON.stringify(metadata), {
+      expirationTtl: ttlSeconds,
+    });
+
+    const host = request.headers.get('host') || '';
+    const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
+    const directUrl = `${protocol}://${host}/${code}`;
+
+    return jsonResponse({
+      success: true,
+      code,
+      directUrl,
+      expiresAt,
+      ttlSeconds,
+      burnAfterRead,
+      itemCount: (metadata.text ? 1 : 0) + fileEntries.length,
+      fileCount: fileEntries.length,
+    });
+  } catch (err: any) {
+    return jsonResponse({ error: 'Failed to create drop', details: err?.message || String(err) }, 500);
+  }
+}
+
+// Handler: Retrieve Drop
+async function handleGetDrop(code: string, isPeek: boolean, env: Env): Promise<Response> {
+  try {
+    if (!code) {
+      return jsonResponse({ error: 'Code is required' }, 400);
+    }
+
+    const raw = await env.ATMR_DROP_KV.get(`drop:${code}`);
+    if (!raw) {
+      return jsonResponse({ error: 'Drop not found or has expired' }, 404);
+    }
+
+    const drop: DropMetadata = JSON.parse(raw);
+    const now = Date.now();
+    const remainingSeconds = Math.max(0, Math.floor((drop.expiresAt - now) / 1000));
+
+    if (remainingSeconds <= 0) {
+      // Already expired
+      await handleDeleteDrop(code, env);
+      return jsonResponse({ error: 'Drop has expired' }, 404);
+    }
+
+    // If burnAfterRead and not just a peek/status check, burn the drop metadata from KV
+    if (drop.burnAfterRead && !isPeek) {
+      drop.retrievedCount += 1;
+      // Immediately delete drop PIN metadata from KV so no new sessions can query this drop
+      await env.ATMR_DROP_KV.delete(`drop:${code}`);
+    }
+
+    return jsonResponse({
+      success: true,
+      drop: {
+        ...drop,
+        remainingSeconds,
+      },
+    });
+  } catch (err: any) {
+    return jsonResponse({ error: 'Failed to fetch drop', details: err?.message || String(err) }, 500);
+  }
+}
+
+// Handler: Stream File
+async function handleGetFile(code: string, fileId: string, isDownload: boolean, env: Env): Promise<Response> {
+  try {
+    if (!code || !fileId) {
+      return jsonResponse({ error: 'Missing code or file ID' }, 400);
+    }
+
+    const kvKey = `file:${code}:${fileId}`;
+    const fileResult = await env.ATMR_DROP_KV.getWithMetadata<{ name: string; type: string; size: number }>(kvKey, {
+      type: 'arrayBuffer',
+    });
+
+    if (!fileResult.value) {
+      return jsonResponse({ error: 'File not found or expired' }, 404);
+    }
+
+    const meta = fileResult.metadata || { name: `file-${fileId}`, type: 'application/octet-stream', size: 0 };
+    const contentType = meta.type || 'application/octet-stream';
+    const dispositionType = isDownload ? 'attachment' : 'inline';
+    const filename = encodeURIComponent(meta.name || 'file');
+
+    return new Response(fileResult.value, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `${dispositionType}; filename="${filename}"; filename*=UTF-8''${filename}`,
+        'Content-Length': fileResult.value.byteLength.toString(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        ...corsHeaders,
+      },
+    });
+  } catch (err: any) {
+    return jsonResponse({ error: 'Failed to download file', details: err?.message || String(err) }, 500);
+  }
+}
+
+// Handler: Delete Drop
+async function handleDeleteDrop(code: string, env: Env): Promise<Response> {
+  try {
+    const raw = await env.ATMR_DROP_KV.get(`drop:${code}`);
+    if (raw) {
+      const drop: DropMetadata = JSON.parse(raw);
+      for (const file of drop.files) {
+        await env.ATMR_DROP_KV.delete(file.kvKey);
+      }
+    }
+    await env.ATMR_DROP_KV.delete(`drop:${code}`);
+    return jsonResponse({ success: true, message: `Drop ${code} deleted` });
+  } catch (err: any) {
+    return jsonResponse({ error: 'Failed to delete drop', details: err?.message || String(err) }, 500);
+  }
+}

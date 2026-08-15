@@ -1,0 +1,11 @@
+node_modules/
+.wrangler/
+.hermes/
+dist/
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties
+android/captures/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+name = "drop"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[kv_namespaces]]
+binding = "ATMR_DROP_KV"
+id = "0edc2a27d1b742cb8d8c4449decb37f2"
