@@ -100,9 +100,27 @@
   const btnCameraClose = document.getElementById('btn-camera-close');
   let mediaStream = null;
 
-  // --- APP VERSION & UPDATE STATE ---
-  const APP_CURRENT_VERSION = (window.APP_VERSION || '1.0.8').replace(/^v/, '').trim();
+  // --- APP VERSION, ENVIRONMENT & API RESOLUTION ---
+  const PROD_API_ORIGIN = 'https://drop.atmr.workers.dev';
+  const APP_CURRENT_VERSION = (window.APP_VERSION || '1.0.9').replace(/^v/, '').trim();
   let isUpdateMandatory = false;
+
+  function isCapacitorNative() {
+    return (
+      (typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ||
+      window.location.protocol === 'capacitor:' ||
+      window.location.protocol === 'file:' ||
+      (window.location.hostname === 'localhost' && !window.location.port) ||
+      (window.location.hostname === '127.0.0.1' && !window.location.port)
+    );
+  }
+
+  function getApiUrl(path) {
+    if (isCapacitorNative()) {
+      return `${PROD_API_ORIGIN}${path.startsWith('/') ? path : '/' + path}`;
+    }
+    return path;
+  }
 
   const updateModal = document.getElementById('update-modal');
   const updateModalOverlay = document.getElementById('update-modal-overlay');
@@ -130,7 +148,7 @@
       // Check Worker version API first
       let data = null;
       try {
-        const res = await fetch('/api/version');
+        const res = await fetch(getApiUrl('/api/version'));
         if (res.ok) data = await res.json();
       } catch (e) {}
 
@@ -451,14 +469,20 @@
           burnAfterRead: checkBurn.checked
         };
 
-        const res = await fetch('/api/drop', {
+        const res = await fetch(getApiUrl('/api/drop'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
-        const data = await res.json();
-        if (!data.success) throw new Error(data.error || 'Failed to create drop');
+        let data;
+        try {
+          data = await res.json();
+        } catch (jsonErr) {
+          throw new Error('Server returned an invalid response. Please try again.');
+        }
+
+        if (!data || !data.success) throw new Error(data?.error || 'Failed to create drop');
 
         activeDropData = data;
         displayShareScreen(data);
@@ -491,7 +515,7 @@
     btnCancelDrop.addEventListener('click', async () => {
       if (activeDropData && activeDropData.code) {
         try {
-          await fetch(`/api/drop/${activeDropData.code}`, { method: 'DELETE' });
+          await fetch(getApiUrl(`/api/drop/${activeDropData.code}`), { method: 'DELETE' });
           showToast('Drop deleted');
         } catch (e) {}
       }
@@ -522,7 +546,7 @@
 
   function displayShareScreen(data) {
     sharePinCode.textContent = data.code;
-    const directUrl = `${window.location.origin}/${data.code}`;
+    const directUrl = data.directUrl || (isCapacitorNative() ? `${PROD_API_ORIGIN}/${data.code}` : `${window.location.origin}/${data.code}`);
     shareDirectUrl.value = directUrl;
 
     renderQr(directUrl);
@@ -557,10 +581,15 @@
     showToast(`Loading PIN ${code}...`);
 
     try {
-      const res = await fetch(`/api/drop/${code}`);
-      const data = await res.json();
+      const res = await fetch(getApiUrl(`/api/drop/${code}`));
+      let data;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        throw new Error('Invalid server response');
+      }
 
-      if (!data.success) throw new Error(data.error || 'Drop not found or expired');
+      if (!data || !data.success) throw new Error(data?.error || 'Drop not found or expired');
 
       displayVaultScreen(data.drop);
       showToast('Drop retrieved!');
