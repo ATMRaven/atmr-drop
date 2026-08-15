@@ -1,8 +1,3 @@
-/**
- * DROP • MINIMALIST CLIENT LOGIC
- * Ultra-clean, fast, cross-device file & text sharing.
- */
-
 (function () {
   'use strict';
 
@@ -10,6 +5,38 @@
   let stagedFiles = [];
   let activeDropData = null;
   let countdownTimer = null;
+
+  // --- SOUND SYNTHESIS (Flagship Audio Feedback) ---
+  const audioCtx = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) ? new (window.AudioContext || window.webkitAudioContext)() : null;
+
+  function playChime(type) {
+    if (!audioCtx) return;
+    try {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+      if (type === 'success') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.08); // E5
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      } else if (type === 'copy') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(880, now);
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      }
+    } catch (e) {}
+  }
 
   // --- DOM ELEMENTS ---
   const tabSend = document.getElementById('tab-send');
@@ -336,6 +363,7 @@
 
         activeDropData = data;
         displayShareScreen(data);
+        playChime('success');
         showToast('Drop created!');
       } catch (err) {
         showToast(err.message || 'Failed to send drop');
@@ -348,6 +376,7 @@
     btnCopyPin.addEventListener('click', () => {
       if (activeDropData && activeDropData.code) {
         navigator.clipboard.writeText(activeDropData.code);
+        playChime('copy');
         showToast(`PIN ${activeDropData.code} copied!`);
       }
     });
@@ -355,6 +384,7 @@
     btnCopyUrl.addEventListener('click', () => {
       if (shareDirectUrl.value) {
         navigator.clipboard.writeText(shareDirectUrl.value);
+        playChime('copy');
         showToast('Link copied to clipboard');
       }
     });

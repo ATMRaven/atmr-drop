@@ -38,18 +38,21 @@ jobs:
       - name: Make Gradle Executable
         run: chmod +x android/gradlew
 
-      - name: Build Android Debug APK
+      - name: Build Android Signed Release APK
+        env:
+          APP_VERSION_CODE: ${{ github.run_number }}
+          APP_VERSION_NAME: 1.0.${{ github.run_number }}
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: Name release APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk atmr-drop.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk atmr-drop.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: atmr-drop-debug-apk
+          name: atmr-drop-apk
           path: atmr-drop.apk
 
       - name: Create GitHub Release & Upload APK
@@ -65,8 +68,7 @@ jobs:
             - **Published by**: atmr
             - **Web Service**: https://drop.atmr.workers.dev
             - **Version**: v1.0.${{ github.run_number }}
+            - **Seamless Updates**: Signed with permanent keystore for in-place app updates.
 
-            Download `atmr-drop.apk` below and open it to install on your Android device.
+            Download `atmr-drop.apk` below and open it to install or update directly over your existing app.
           files: atmr-drop.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
