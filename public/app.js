@@ -142,18 +142,59 @@
     setupActions();
     setupUpdateModal();
     setupMobileAppBanner();
+    setupServiceWorker();
     checkDirectPinRoute();
     checkAppUpdate();
   }
+
+  function isStandalonePwa() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+
+  // --- SERVICE WORKER (PWA) ---
+  function setupServiceWorker() {
+    if ('serviceWorker' in navigator && !isCapacitorNative()) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((reg) => {
+            console.log('[PWA] Service Worker registered successfully, scope:', reg.scope);
+          })
+          .catch((err) => {
+            console.warn('[PWA] Service Worker registration failed:', err);
+          });
+      });
+    }
+  }
+
+  // PWA Install Prompt Capture
+  let deferredPwaPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPwaPrompt = e;
+    const banner = document.getElementById('mobile-app-banner');
+    const bannerBtn = banner?.querySelector('.btn-banner-download');
+    if (banner && bannerBtn && !isCapacitorNative() && !isStandalonePwa()) {
+      banner.classList.remove('hidden');
+      bannerBtn.textContent = 'Install App';
+    }
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredPwaPrompt = null;
+    const banner = document.getElementById('mobile-app-banner');
+    if (banner) banner.classList.add('hidden');
+    showToast('Drop App installed!');
+  });
 
   // --- MOBILE WEB PROMO BANNER ---
   function setupMobileAppBanner() {
     const banner = document.getElementById('mobile-app-banner');
     const btnDismiss = document.getElementById('btn-dismiss-app-banner');
+    const btnAction = banner?.querySelector('.btn-banner-download');
     if (!banner) return;
 
-    // Never show promo banner inside the native installed app
-    if (isCapacitorNative()) {
+    // Never show promo banner inside the native installed app or installed standalone PWA
+    if (isCapacitorNative() || isStandalonePwa()) {
       banner.classList.add('hidden');
       return;
     }
@@ -163,6 +204,21 @@
       banner.classList.remove('hidden');
     } else {
       banner.classList.add('hidden');
+    }
+
+    if (btnAction) {
+      btnAction.addEventListener('click', async (e) => {
+        if (deferredPwaPrompt) {
+          e.preventDefault();
+          deferredPwaPrompt.prompt();
+          const { outcome } = await deferredPwaPrompt.userChoice;
+          console.log('[PWA] User choice outcome:', outcome);
+          deferredPwaPrompt = null;
+          if (outcome === 'accepted') {
+            banner.classList.add('hidden');
+          }
+        }
+      });
     }
 
     if (btnDismiss) {
