@@ -20,8 +20,8 @@ async function runVerification() {
     // Step 1: Open Home / PIN screen
     console.log('Step 1: Navigating to http://127.0.0.1:8787 ...');
     await page.goto('http://127.0.0.1:8787', { waitUntil: 'networkidle0' });
-    await page.waitForSelector('#view-pin.active');
-    console.log('PIN keypad view active.');
+    await page.waitForSelector('#view-receive-input.active');
+    console.log('Art Deco PIN keypad view active.');
 
     const homeScreenshotPath = path.join(ARTIFACT_DIR, 'screenshot_home.png');
     await page.screenshot({ path: homeScreenshotPath, fullPage: false });
@@ -29,22 +29,19 @@ async function runVerification() {
 
     // Step 2: Switch to Send Drop view
     console.log('Step 2: Switching to Send Drop view...');
-    await page.click('#nav-btn-send');
+    await page.click('#nav-mode-send');
     await page.waitForSelector('#view-send.active');
 
     // Type text snippet
-    await page.type('#text-input', '⚡ Hello from atmr-drop! Super fast cross-device sharing via Cloudflare & WiFi.');
-
-    // Select 15 Mins TTL chip
-    await page.click('.ttl-chip[data-ttl="900"]');
+    await page.type('#input-text', '✦ ATMR DROP: The Roaring Twenties Wire Dispatch. Encrypted transmission active across WiFi.');
 
     const sendScreenshotPath = path.join(ARTIFACT_DIR, 'screenshot_send.png');
     await page.screenshot({ path: sendScreenshotPath, fullPage: false });
     console.log('Saved screenshot_send.png');
 
-    // Click "Generate Drop & PIN"
-    console.log('Generating drop...');
-    await page.click('#btn-create-drop');
+    // Click "Transmit Wire Dispatch"
+    console.log('Transmitting wire dispatch...');
+    await page.click('#btn-send-drop');
 
     // Wait for share view
     await page.waitForSelector('#view-share.active', { timeout: 10000 });
@@ -66,12 +63,12 @@ async function runVerification() {
 
     // Enter digits on keypad
     for (const char of pinCode) {
-      await receiverPage.click(`.keypad-btn[data-val="${char}"]`);
+      await receiverPage.click(`.deco-btn-key[data-key="${char}"]`);
       await new Promise((r) => setTimeout(r, 150));
     }
 
     // Wait for receive view
-    await receiverPage.waitForSelector('#view-receive.active', { timeout: 10000 });
+    await receiverPage.waitForSelector('#view-receive-content.active', { timeout: 10000 });
     await new Promise((r) => setTimeout(r, 800));
 
     const receivedText = await receiverPage.$eval('#received-text-content', (el) => el.textContent.trim());
@@ -87,14 +84,14 @@ async function runVerification() {
     await directPage.setViewport({ width: 1200, height: 900, deviceScaleFactor: 2 });
     await directPage.goto(`http://127.0.0.1:8787/${pinCode}`, { waitUntil: 'domcontentloaded' });
 
-    await directPage.waitForSelector('#view-receive.active', { timeout: 10000 });
+    await directPage.waitForSelector('#view-receive-content.active', { timeout: 10000 });
     await new Promise((r) => setTimeout(r, 800));
 
     const directScreenshotPath = path.join(ARTIFACT_DIR, 'screenshot_direct.png');
     await directPage.screenshot({ path: directScreenshotPath, fullPage: false });
     console.log('Saved screenshot_direct.png');
 
-    console.log('🎉 ALL BROWSER VERIFICATION TESTS PASSED SUCCESSFULLY!');
+    console.log('🎉 ALL ART DECO BROWSER VERIFICATION TESTS PASSED SUCCESSFULLY!');
   } finally {
     await browser.close();
   }

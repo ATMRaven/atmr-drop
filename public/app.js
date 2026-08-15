@@ -1,247 +1,329 @@
 /**
- * THE DAILY DROP • Frontend Application Controller
- * Created by atmr
+ * ATMR DROP • ART DECO / GATSBY CLIENT LOGIC
+ * Seamless cross-device encrypted file, photo and text sharing.
  */
 
 (function () {
   'use strict';
 
-  // --- State Management ---
-  const state = {
-    currentView: 'pin', // 'pin' | 'send' | 'share' | 'receive'
-    enteredPin: '',
-    selectedTtl: 300, // default 5 mins
-    burnAfterRead: false,
-    selectedFiles: [], // Array<{ name, size, type, dataBase64, previewUrl }>
-    currentDrop: null, // Active drop metadata
-    timerInterval: null,
-    html5QrScanner: null,
-    cameraStream: null,
-  };
+  // --- STATE ---
+  let stagedFiles = [];
+  let activeDropData = null;
+  let countdownTimer = null;
+  let audioCtx = null;
 
-  // --- DOM Elements ---
-  const views = {
-    pin: document.getElementById('view-pin'),
-    send: document.getElementById('view-send'),
-    share: document.getElementById('view-share'),
-    receive: document.getElementById('view-receive'),
-  };
+  // --- DOM ELEMENTS ---
+  const headerDateEl = document.getElementById('deco-edition-date');
+  const navReceiveBtn = document.getElementById('nav-mode-receive');
+  const navSendBtn = document.getElementById('nav-mode-send');
 
-  const nav = {
-    brand: document.getElementById('nav-brand'),
-    btnEnterPin: document.getElementById('nav-btn-enter-pin'),
-    btnSend: document.getElementById('nav-btn-send'),
-  };
+  const viewReceiveInput = document.getElementById('view-receive-input');
+  const viewSend = document.getElementById('view-send');
+  const viewShare = document.getElementById('view-share');
+  const viewReceiveContent = document.getElementById('view-receive-content');
 
-  // Date Header Element
-  const dateElement = document.getElementById('current-newspaper-date');
-  if (dateElement) {
-    const now = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    dateElement.textContent = `${now.toLocaleDateString('en-US', options).toUpperCase()} • NEW YORK & GLOBAL EDITION`;
-  }
+  // PIN inputs
+  const pinCells = [
+    document.getElementById('pin-digit-1'),
+    document.getElementById('pin-digit-2'),
+    document.getElementById('pin-digit-3'),
+    document.getElementById('pin-digit-4')
+  ];
+  const btnFetchDrop = document.getElementById('btn-fetch-drop');
 
-  // PIN View elements
-  const pinBoxes = document.querySelectorAll('.pin-box');
-  const pinHiddenInput = document.getElementById('pin-hidden-input');
-  const pinStatusMsg = document.getElementById('pin-status-msg');
-  const btnGotoSend = document.getElementById('btn-goto-send');
-  const keypadBtns = document.querySelectorAll('.keypad-btn[data-val]');
-  const keypadBtnBackspace = document.getElementById('keypad-btn-backspace');
-  const keypadBtnQr = document.getElementById('keypad-btn-qr');
-
-  // Send View elements
-  const dropzone = document.getElementById('file-dropzone');
+  // Send view elements
+  const inputText = document.getElementById('input-text');
+  const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('file-input');
-  const btnCameraSnap = document.getElementById('btn-camera-snap');
-  const selectedFilesContainer = document.getElementById('selected-files-container');
-  const fileCardsGrid = document.getElementById('file-cards-grid');
-  const filesCountSpan = document.getElementById('files-count');
-  const btnClearFiles = document.getElementById('btn-clear-files');
-  const textInput = document.getElementById('text-input');
-  const charCountSpan = document.getElementById('char-count');
-  const btnClearText = document.getElementById('btn-clear-text');
-  const btnPasteClipboard = document.getElementById('btn-paste-clipboard');
-  const ttlChips = document.querySelectorAll('.ttl-chip');
-  const toggleBurn = document.getElementById('toggle-burn');
-  const btnCreateDrop = document.getElementById('btn-create-drop');
-  const uploadProgressContainer = document.getElementById('upload-progress-container');
-  const uploadProgressFill = document.getElementById('upload-progress-fill');
-  const uploadProgressLabel = document.getElementById('upload-progress-label');
+  const stagedManifest = document.getElementById('staged-files-list');
+  const stagedItemsUl = document.getElementById('staged-files-items');
+  const fileCountBadge = document.getElementById('file-count-badge');
+  const selectTtl = document.getElementById('select-ttl');
+  const checkBurn = document.getElementById('check-burn');
+  const btnSendDrop = document.getElementById('btn-send-drop');
+  const btnCamera = document.getElementById('btn-camera');
 
-  // Share View elements
+  // Share view elements
   const sharePinCode = document.getElementById('share-pin-code');
-  const btnCopyPinCode = document.getElementById('btn-copy-pin-code');
-  const shareExpiryTimer = document.getElementById('share-expiry-timer');
-  const shareBurnIndicator = document.getElementById('share-burn-indicator');
+  const shareQrCanvas = document.getElementById('share-qrcode-canvas');
   const shareDirectUrl = document.getElementById('share-direct-url');
-  const btnCopyShareUrl = document.getElementById('btn-copy-share-url');
-  const btnDoneShare = document.getElementById('btn-done-share');
+  const btnCopyUrl = document.getElementById('btn-copy-url');
+  const shareTimeLeft = document.getElementById('share-time-left');
+  const shareBurnBadge = document.getElementById('share-burn-badge');
+  const btnCancelDrop = document.getElementById('btn-cancel-drop');
+  const btnNewSend = document.getElementById('btn-new-send');
 
-  // Receive View elements
-  const receiveExpiryTimer = document.getElementById('receive-expiry-timer');
-  const receiveBurnBadge = document.getElementById('receive-burn-badge');
-  const receivedTextBox = document.getElementById('received-text-box');
+  // Receive view elements
+  const receiveExpiryText = document.getElementById('receive-expiry-text');
+  const receiveBurnNotice = document.getElementById('receive-burn-notice');
+  const receivedTextContainer = document.getElementById('received-text-container');
   const receivedTextContent = document.getElementById('received-text-content');
   const btnCopyReceivedText = document.getElementById('btn-copy-received-text');
-  const copyTextBtnLabel = document.getElementById('copy-text-btn-label');
   const receivedImagesContainer = document.getElementById('received-images-container');
-  const receivedImagesCount = document.getElementById('received-images-count');
   const receivedImagesGrid = document.getElementById('received-images-grid');
+  const imagesCount = document.getElementById('images-count');
   const receivedFilesContainer = document.getElementById('received-files-container');
-  const receivedFilesCount = document.getElementById('received-files-count');
   const receivedFilesList = document.getElementById('received-files-list');
+  const filesCount = document.getElementById('files-count');
   const btnDownloadAllZip = document.getElementById('btn-download-all-zip');
-  const btnReceiveDone = document.getElementById('btn-receive-done');
+  const btnReceiveAnother = document.getElementById('btn-receive-another');
 
-  // Modals
-  const modalScanner = document.getElementById('modal-scanner');
-  const btnCloseScanner = document.getElementById('btn-close-scanner');
-  const modalCameraSnap = document.getElementById('modal-camera-snap');
-  const btnCloseCamera = document.getElementById('btn-close-camera');
+  // Modal Camera
+  const cameraModal = document.getElementById('camera-modal');
   const cameraVideo = document.getElementById('camera-video');
   const cameraCanvas = document.getElementById('camera-canvas');
-  const btnTriggerSnap = document.getElementById('btn-trigger-snap');
-  const modalLightbox = document.getElementById('modal-lightbox');
-  const lightboxImg = document.getElementById('lightbox-img');
-  const btnCloseLightbox = document.getElementById('btn-close-lightbox');
-  const toastContainer = document.getElementById('toast-container');
+  const btnCameraSnap = document.getElementById('btn-camera-snap');
+  const btnCameraClose = document.getElementById('btn-camera-close');
+  let mediaStream = null;
 
-  // --- Sound Effects via Web Audio API ---
-  const audioCtx = window.AudioContext || window.webkitAudioContext ? new (window.AudioContext || window.webkitAudioContext)() : null;
-  function playBeep(freq = 600, type = 'sine', duration = 0.08) {
-    if (!audioCtx) return;
+  // --- INIT ---
+  function init() {
+    initDynamicDate();
+    setupNavigation();
+    setupPinInputs();
+    setupKeypad();
+    setupDropzone();
+    setupCamera();
+    setupActions();
+    checkDirectPinRoute();
+  }
+
+  function initDynamicDate() {
+    if (!headerDateEl) return;
+    const now = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const dateStr = now.toLocaleDateString('en-US', options).toUpperCase();
+    headerDateEl.textContent = `${dateStr} • LUXURY METROPOLIS EDITION`;
+  }
+
+  // --- AUDIO SYNTHESIS (METALLIC CHIME & CLICK) ---
+  function playSound(type) {
     try {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      const now = audioCtx.currentTime;
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
       osc.connect(gain);
       gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + duration);
-    } catch (_) {}
-  }
 
-  function playSuccessChime() {
-    playBeep(523.25, 'sine', 0.1);
-    setTimeout(() => playBeep(659.25, 'sine', 0.1), 100);
-    setTimeout(() => playBeep(783.99, 'sine', 0.15), 200);
-  }
-
-  // --- Toast Notifications ---
-  function showToast(message) {
-    const toast = document.createElement('div');
-    toast.className = 'news-toast';
-    toast.textContent = `[TELEGRAPH] ${message}`;
-    toastContainer.appendChild(toast);
-    setTimeout(() => {
-      if (toast.parentNode) toast.parentNode.removeChild(toast);
-    }, 3200);
-  }
-
-  // --- View Switcher ---
-  function switchView(viewName) {
-    state.currentView = viewName;
-    Object.keys(views).forEach((k) => {
-      if (views[k]) views[k].classList.toggle('active', k === viewName);
-    });
-
-    // Update navigation active states
-    if (nav.btnEnterPin && nav.btnSend) {
-      nav.btnEnterPin.classList.toggle('active', viewName === 'pin' || viewName === 'receive');
-      nav.btnSend.classList.toggle('active', viewName === 'send' || viewName === 'share');
-    }
-
-    // Auto-focus PIN input if switching to PIN view
-    if (viewName === 'pin') {
-      setTimeout(() => {
-        pinHiddenInput.focus();
-      }, 100);
-    }
-  }
-
-  // --- PIN Keypad Logic ---
-  function updatePinBoxes() {
-    pinBoxes.forEach((box, i) => {
-      const char = state.enteredPin[i];
-      if (char) {
-        box.textContent = char;
-        box.classList.add('filled');
-        box.classList.remove('active-pulse');
-      } else {
-        box.textContent = '_';
-        box.classList.remove('filled');
-        box.classList.toggle('active-pulse', i === state.enteredPin.length);
+      if (type === 'click') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(110, now + 0.05);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+        osc.start(now);
+        osc.stop(now + 0.05);
+      } else if (type === 'success') {
+        // Metallic Gold Chime (Arpeggio)
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+        osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+        osc.frequency.setValueAtTime(1046.50, now + 0.24); // C6
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc.start(now);
+        osc.stop(now + 0.6);
+      } else if (type === 'retrieve') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(330, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.2);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
       }
+    } catch (e) {
+      // Ignore audio failure
+    }
+  }
+
+  // --- NAVIGATION ---
+  function showView(viewId) {
+    [viewReceiveInput, viewSend, viewShare, viewReceiveContent].forEach(v => {
+      if (v) v.classList.remove('active');
     });
 
-    if (pinHiddenInput.value !== state.enteredPin) {
-      pinHiddenInput.value = state.enteredPin;
-    }
-
-    if (state.enteredPin.length === 4) {
-      submitPin(state.enteredPin);
-    }
-  }
-
-  function handlePinInput(char) {
-    if (state.enteredPin.length < 4 && /[0-9A-Za-z]/.test(char)) {
-      state.enteredPin += char.toUpperCase();
-      playBeep(400 + state.enteredPin.length * 80);
-      updatePinBoxes();
-    }
-  }
-
-  function handlePinBackspace() {
-    if (state.enteredPin.length > 0) {
-      state.enteredPin = state.enteredPin.slice(0, -1);
-      playBeep(320);
-      setPinStatus('');
-      updatePinBoxes();
+    if (viewId === 'receive') {
+      viewReceiveInput.classList.add('active');
+      navReceiveBtn.classList.add('active');
+      navSendBtn.classList.remove('active');
+      pinCells[0].focus();
+    } else if (viewId === 'send') {
+      viewSend.classList.add('active');
+      navSendBtn.classList.add('active');
+      navReceiveBtn.classList.remove('active');
+    } else if (viewId === 'share') {
+      viewShare.classList.add('active');
+    } else if (viewId === 'content') {
+      viewReceiveContent.classList.add('active');
     }
   }
 
-  function setPinStatus(msg, type = '') {
-    pinStatusMsg.textContent = msg;
-    pinStatusMsg.className = 'pin-status' + (type ? ` ${type}` : '');
+  function setupNavigation() {
+    navReceiveBtn.addEventListener('click', () => {
+      playSound('click');
+      showView('receive');
+    });
+    navSendBtn.addEventListener('click', () => {
+      playSound('click');
+      showView('send');
+    });
   }
 
-  async function submitPin(code) {
-    setPinStatus('DECRYPTING WIRE...', 'loading');
-    try {
-      const res = await fetch(`/api/drop/${code}`);
-      const data = await res.json();
+  // --- PIN INPUT HANDLING ---
+  function setupPinInputs() {
+    pinCells.forEach((cell, idx) => {
+      cell.addEventListener('input', (e) => {
+        const val = e.target.value.replace(/\D/g, '');
+        cell.value = val ? val[val.length - 1] : '';
 
-      if (!res.ok || !data.success) {
-        setPinStatus(data.error ? `ERROR: ${data.error.toUpperCase()}` : 'DROP NOT FOUND OR EXPIRED', 'error');
-        playBeep(220, 'sawtooth', 0.2);
-        setTimeout(() => {
-          state.enteredPin = '';
-          updatePinBoxes();
-        }, 1200);
+        if (cell.value && idx < pinCells.length - 1) {
+          pinCells[idx + 1].focus();
+        }
+
+        const fullPin = getEnteredPin();
+        if (fullPin.length === 4) {
+          fetchDropByPin(fullPin);
+        }
+      });
+
+      cell.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !cell.value && idx > 0) {
+          pinCells[idx - 1].focus();
+        } else if (e.key === 'Enter') {
+          const fullPin = getEnteredPin();
+          if (fullPin.length === 4) {
+            fetchDropByPin(fullPin);
+          }
+        }
+      });
+
+      cell.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const paste = (e.clipboardData || window.clipboardData).getData('text').trim();
+        const digits = paste.replace(/\D/g, '').slice(0, 4);
+        if (digits) {
+          digits.split('').forEach((d, i) => {
+            if (pinCells[i]) pinCells[i].value = d;
+          });
+          if (digits.length === 4) {
+            fetchDropByPin(digits);
+          } else if (pinCells[digits.length]) {
+            pinCells[digits.length].focus();
+          }
+        }
+      });
+    });
+
+    btnFetchDrop.addEventListener('click', () => {
+      const pin = getEnteredPin();
+      if (pin.length !== 4) {
+        showToast('Please enter complete 4-digit PIN code');
         return;
       }
-
-      playSuccessChime();
-      renderReceivedDrop(data.drop);
-      switchView('receive');
-      setPinStatus('');
-    } catch (err) {
-      setPinStatus('NETWORK CONNECTION FAILED. RETRY.', 'error');
-    }
+      fetchDropByPin(pin);
+    });
   }
 
-  // --- Send View / File & Text Handling ---
-  function formatBytes(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  function setupKeypad() {
+    document.querySelectorAll('.deco-btn-key').forEach(btn => {
+      btn.addEventListener('click', () => {
+        playSound('click');
+        const key = btn.dataset.key;
+        if (key === 'clear') {
+          pinCells.forEach(c => c.value = '');
+          pinCells[0].focus();
+        } else if (key === 'backspace') {
+          for (let i = pinCells.length - 1; i >= 0; i--) {
+            if (pinCells[i].value) {
+              pinCells[i].value = '';
+              pinCells[i].focus();
+              break;
+            }
+          }
+        } else {
+          // Number key
+          for (let i = 0; i < pinCells.length; i++) {
+            if (!pinCells[i].value) {
+              pinCells[i].value = key;
+              if (i < pinCells.length - 1) {
+                pinCells[i + 1].focus();
+              } else {
+                const fullPin = getEnteredPin();
+                if (fullPin.length === 4) {
+                  fetchDropByPin(fullPin);
+                }
+              }
+              break;
+            }
+          }
+        }
+      });
+    });
+  }
+
+  function getEnteredPin() {
+    return pinCells.map(c => c.value).join('');
+  }
+
+  // --- DROPZONE & FILE HANDLING ---
+  function setupDropzone() {
+    dropzone.addEventListener('click', (e) => {
+      if (e.target !== btnCamera && !btnCamera.contains(e.target)) {
+        fileInput.click();
+      }
+    });
+
+    fileInput.addEventListener('change', () => {
+      handleFiles(fileInput.files);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      if (dt && dt.files && dt.files.length) {
+        handleFiles(dt.files);
+      }
+    });
+  }
+
+  async function handleFiles(files) {
+    for (const file of Array.from(files)) {
+      if (stagedFiles.some(f => f.name === file.name && f.size === file.size)) continue;
+
+      const base64 = await readFileAsBase64(file);
+      stagedFiles.push({
+        id: 'f_' + Math.random().toString(36).substring(2, 9),
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        dataBase64: base64
+      });
+    }
+    renderStagedFiles();
   }
 
   function readFileAsBase64(file) {
@@ -253,593 +335,427 @@
     });
   }
 
-  async function addFiles(fileList) {
-    if (!fileList || fileList.length === 0) return;
-
-    for (const file of fileList) {
-      if (file.size > 25 * 1024 * 1024) {
-        showToast(`"${file.name}" exceeds 25MB limit.`);
-        continue;
-      }
-
-      const isImage = file.type.startsWith('image/');
-      let previewUrl = '';
-      const dataBase64 = await readFileAsBase64(file);
-
-      if (isImage) {
-        previewUrl = dataBase64;
-      }
-
-      state.selectedFiles.push({
-        name: file.name,
-        size: file.size,
-        type: file.type || 'application/octet-stream',
-        dataBase64,
-        previewUrl,
-      });
-    }
-
-    renderSelectedFiles();
-    playBeep(700);
-  }
-
-  function renderSelectedFiles() {
-    if (state.selectedFiles.length === 0) {
-      selectedFilesContainer.classList.add('hidden');
-      filesCountSpan.textContent = '0';
-      fileCardsGrid.innerHTML = '';
+  function renderStagedFiles() {
+    stagedItemsUl.innerHTML = '';
+    if (stagedFiles.length === 0) {
+      stagedManifest.classList.add('hidden');
       return;
     }
 
-    selectedFilesContainer.classList.remove('hidden');
-    filesCountSpan.textContent = state.selectedFiles.length.toString();
-    fileCardsGrid.innerHTML = '';
+    stagedManifest.classList.remove('hidden');
+    fileCountBadge.textContent = stagedFiles.length;
 
-    state.selectedFiles.forEach((file, index) => {
-      const card = document.createElement('div');
-      card.className = 'file-card-preview';
+    stagedFiles.forEach((file, idx) => {
+      const li = document.createElement('li');
+      li.className = 'manifest-item';
+      li.innerHTML = `
+        <span class="manifest-item-name">${escapeHtml(file.name)}</span>
+        <div>
+          <span class="manifest-item-size">${formatFileSize(file.size)}</span>
+          <button type="button" class="manifest-item-remove" data-idx="${idx}" title="Remove file">&times;</button>
+        </div>
+      `;
+      stagedItemsUl.appendChild(li);
+    });
 
-      const name = document.createElement('span');
-      name.className = 'file-card-name';
-      name.textContent = file.name;
-
-      const size = document.createElement('span');
-      size.className = 'file-card-size';
-      size.textContent = formatBytes(file.size);
-
-      const removeBtn = document.createElement('button');
-      removeBtn.className = 'file-remove-btn';
-      removeBtn.innerHTML = '×';
-      removeBtn.title = 'Remove file';
-      removeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        state.selectedFiles.splice(index, 1);
-        renderSelectedFiles();
+    document.querySelectorAll('.manifest-item-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(e.target.dataset.idx, 10);
+        stagedFiles.splice(idx, 1);
+        renderStagedFiles();
       });
-
-      card.appendChild(name);
-      card.appendChild(size);
-      card.appendChild(removeBtn);
-      fileCardsGrid.appendChild(card);
     });
   }
 
-  // --- Dynamic TTL & Burn Options ---
-  ttlChips.forEach((chip) => {
-    chip.addEventListener('click', () => {
-      ttlChips.forEach((c) => c.classList.remove('active'));
-      chip.classList.add('active');
-      state.selectedTtl = parseInt(chip.dataset.ttl || '300', 10);
-      playBeep(500);
-    });
-  });
-
-  toggleBurn.addEventListener('change', () => {
-    state.burnAfterRead = toggleBurn.checked;
-    playBeep(state.burnAfterRead ? 650 : 350);
-  });
-
-  textInput.addEventListener('input', () => {
-    charCountSpan.textContent = `${textInput.value.length} CHARACTERS`;
-  });
-
-  btnClearText.addEventListener('click', () => {
-    textInput.value = '';
-    charCountSpan.textContent = '0 CHARACTERS';
-  });
-
-  btnPasteClipboard.addEventListener('click', async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        textInput.value = text;
-        charCountSpan.textContent = `${text.length} CHARACTERS`;
-        showToast('Pasted wire text from clipboard.');
-        playBeep(800);
-      }
-    } catch (_) {
-      showToast('Clipboard access required.');
-    }
-  });
-
-  btnClearFiles.addEventListener('click', () => {
-    state.selectedFiles = [];
-    renderSelectedFiles();
-  });
-
-  // --- Drop Creation Request ---
-  async function createDrop() {
-    const textVal = textInput.value.trim();
-    if (!textVal && state.selectedFiles.length === 0) {
-      showToast('Please attach at least one file or compose text.');
-      playBeep(250, 'sawtooth');
-      return;
-    }
-
-    btnCreateDrop.disabled = true;
-    uploadProgressContainer.classList.remove('hidden');
-    uploadProgressFill.style.width = '35%';
-    uploadProgressLabel.textContent = 'ENCODING WIRE DISPATCH...';
-
-    try {
-      const payload = {
-        text: textVal || undefined,
-        ttlSeconds: state.selectedTtl,
-        burnAfterRead: state.burnAfterRead,
-        files: state.selectedFiles.map((f) => ({
-          name: f.name,
-          type: f.type,
-          size: f.size,
-          dataBase64: f.dataBase64,
-        })),
-      };
-
-      uploadProgressFill.style.width = '75%';
-
-      const res = await fetch('/api/drop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const result = await res.json();
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || 'Failed to create wire dispatch');
-      }
-
-      uploadProgressFill.style.width = '100%';
-      uploadProgressLabel.textContent = 'TRANSMISSION COMPLETE!';
-      playSuccessChime();
-
-      // Show Share Screen
-      renderShareScreen(result);
-      switchView('share');
-
-      // Clear input fields
-      textInput.value = '';
-      charCountSpan.textContent = '0 CHARACTERS';
-      state.selectedFiles = [];
-      renderSelectedFiles();
-    } catch (err) {
-      showToast(err.message || 'Transmission error');
-      playBeep(220, 'sawtooth');
-    } finally {
-      btnCreateDrop.disabled = false;
-      setTimeout(() => {
-        uploadProgressContainer.classList.add('hidden');
-        uploadProgressFill.style.width = '0%';
-      }, 1000);
-    }
-  }
-
-  // --- Share Screen Presentation ---
-  function renderShareScreen(dropInfo) {
-    sharePinCode.textContent = dropInfo.code;
-    shareDirectUrl.value = dropInfo.directUrl;
-
-    if (dropInfo.burnAfterRead) {
-      shareBurnIndicator.classList.remove('hidden');
-    } else {
-      shareBurnIndicator.classList.add('hidden');
-    }
-
-    // Render Vector QR Code
-    const qrContainer = document.getElementById('share-qr-container');
-    if (qrContainer && typeof window.qrcode === 'function') {
+  // --- CAMERA CAPTURE ---
+  function setupCamera() {
+    btnCamera.addEventListener('click', async (e) => {
+      e.stopPropagation();
       try {
-        const qr = window.qrcode(0, 'M');
-        qr.addData(dropInfo.directUrl);
-        qr.make();
-        qrContainer.innerHTML = qr.createSvgTag({ cellSize: 3, margin: 1, scalable: true });
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        cameraVideo.srcObject = mediaStream;
+        cameraModal.classList.add('active');
       } catch (err) {
-        console.error('QR Render Error:', err);
+        showToast('Camera access denied or unavailable');
       }
-    }
+    });
 
-    startExpiryCountdown(shareExpiryTimer, dropInfo.expiresAt);
+    btnCameraClose.addEventListener('click', closeCamera);
+
+    btnCameraSnap.addEventListener('click', () => {
+      if (!mediaStream) return;
+      cameraCanvas.width = cameraVideo.videoWidth || 640;
+      cameraCanvas.height = cameraVideo.videoHeight || 480;
+      const ctx = cameraCanvas.getContext('2d');
+      ctx.drawImage(cameraVideo, 0, 0);
+
+      const base64 = cameraCanvas.toDataURL('image/jpeg', 0.85);
+      const filename = `snapshot_${new Date().toISOString().replace(/[:.]/g, '-')}.jpg`;
+
+      stagedFiles.push({
+        id: 'f_' + Math.random().toString(36).substring(2, 9),
+        name: filename,
+        type: 'image/jpeg',
+        size: Math.round(base64.length * 0.75),
+        dataBase64: base64
+      });
+
+      renderStagedFiles();
+      closeCamera();
+      showToast('Photograph captured and staged');
+      playSound('success');
+    });
   }
 
-  // --- Receive Screen Presentation ---
-  function renderReceivedDrop(drop) {
-    state.currentDrop = drop;
-    startExpiryCountdown(receiveExpiryTimer, drop.expiresAt);
-
-    if (drop.burnAfterRead) {
-      receiveBurnBadge.classList.remove('hidden');
-    } else {
-      receiveBurnBadge.classList.add('hidden');
+  function closeCamera() {
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+      mediaStream = null;
     }
+    cameraModal.classList.remove('active');
+  }
 
-    // Text Display
-    if (drop.text) {
-      receivedTextBox.classList.remove('hidden');
-      receivedTextContent.textContent = drop.text;
-    } else {
-      receivedTextBox.classList.add('hidden');
-      receivedTextContent.textContent = '';
-    }
+  // --- TRANSMIT DROP ACTION ---
+  function setupActions() {
+    btnSendDrop.addEventListener('click', async () => {
+      const text = inputText.value.trim();
+      if (!text && stagedFiles.length === 0) {
+        showToast('Please enter text or attach at least one file');
+        return;
+      }
 
-    // Image Previews & Files List
-    const imageFiles = drop.files.filter((f) => f.type.startsWith('image/'));
+      btnSendDrop.disabled = true;
+      btnSendDrop.querySelector('.btn-text').textContent = 'ENCRYPTING & DISPATCHING...';
 
-    if (imageFiles.length > 0) {
-      receivedImagesContainer.classList.remove('hidden');
-      receivedImagesCount.textContent = imageFiles.length.toString();
-      receivedImagesGrid.innerHTML = '';
+      try {
+        const payload = {
+          text: text || undefined,
+          files: stagedFiles,
+          ttlSeconds: parseInt(selectTtl.value, 10),
+          burnAfterRead: checkBurn.checked
+        };
 
-      imageFiles.forEach((file) => {
-        const fileUrl = `/api/file/${drop.code}/${file.id}`;
-        const card = document.createElement('div');
-        card.className = 'image-card-news';
-
-        const img = document.createElement('img');
-        img.src = fileUrl;
-        img.alt = file.name;
-        img.loading = 'lazy';
-
-        const caption = document.createElement('div');
-        caption.className = 'image-caption-news';
-        caption.textContent = file.name;
-
-        card.appendChild(img);
-        card.appendChild(caption);
-
-        card.addEventListener('click', () => {
-          lightboxImg.src = fileUrl;
-          modalLightbox.classList.remove('hidden');
+        const res = await fetch('/api/drop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         });
 
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to dispatch drop');
+        }
+
+        activeDropData = data;
+        displayShareReceipt(data);
+        playSound('success');
+        showToast('Wire Dispatch Broadcasted Successfully!');
+      } catch (err) {
+        showToast(err.message || 'Transmission failed');
+      } finally {
+        btnSendDrop.disabled = false;
+        btnSendDrop.querySelector('.btn-text').textContent = 'TRANSMIT WIRE DISPATCH';
+      }
+    });
+
+    btnCopyUrl.addEventListener('click', () => {
+      if (!shareDirectUrl.value) return;
+      navigator.clipboard.writeText(shareDirectUrl.value);
+      playSound('click');
+      showToast('Direct dispatch URL copied to clipboard');
+    });
+
+    btnCancelDrop.addEventListener('click', async () => {
+      if (!activeDropData || !activeDropData.code) return;
+      try {
+        await fetch(`/api/drop/${activeDropData.code}`, { method: 'DELETE' });
+        showToast('Dispatch purged from vault');
+      } catch (e) {
+        // Ignore
+      }
+      resetSendForm();
+      showView('send');
+    });
+
+    btnNewSend.addEventListener('click', () => {
+      resetSendForm();
+      showView('send');
+    });
+
+    btnCopyReceivedText.addEventListener('click', () => {
+      const text = receivedTextContent.textContent;
+      if (text) {
+        navigator.clipboard.writeText(text);
+        playSound('click');
+        showToast('Memorandum copied to clipboard');
+      }
+    });
+
+    btnDownloadAllZip.addEventListener('click', downloadAllFilesAsZip);
+
+    btnReceiveAnother.addEventListener('click', () => {
+      pinCells.forEach(c => c.value = '');
+      showView('receive');
+    });
+  }
+
+  function displayShareReceipt(data) {
+    sharePinCode.textContent = data.code;
+    const directUrl = `${window.location.origin}/${data.code}`;
+    shareDirectUrl.value = directUrl;
+
+    // Render Optical QR Matrix
+    renderQrCode(directUrl);
+
+    // Burn badge
+    if (data.burnAfterRead) {
+      shareBurnBadge.classList.remove('hidden');
+    } else {
+      shareBurnBadge.classList.add('hidden');
+    }
+
+    // Start Countdown
+    startExpiryCountdown(data.expiresAt, shareTimeLeft);
+
+    showView('share');
+  }
+
+  function renderQrCode(url) {
+    shareQrCanvas.innerHTML = '';
+    try {
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(shareQrCanvas, {
+          text: url,
+          width: 170,
+          height: 170,
+          colorDark: '#0A0A0A',
+          colorLight: '#FFFFFF',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } else {
+        shareQrCanvas.innerHTML = `<div style="padding: 20px; font-size: 0.8rem; color: #000;">${url}</div>`;
+      }
+    } catch (e) {
+      shareQrCanvas.innerHTML = `<div style="padding: 20px; font-size: 0.8rem; color: #000;">${url}</div>`;
+    }
+  }
+
+  // --- RETRIEVE DROP BY PIN ---
+  async function fetchDropByPin(code) {
+    playSound('retrieve');
+    btnFetchDrop.disabled = true;
+    showToast(`Decrypting Wire PIN: ${code}...`);
+
+    try {
+      const res = await fetch(`/api/drop/${code}`);
+      const data = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Invalid or expired wire code');
+      }
+
+      displayDecryptedDrop(data.drop);
+      playSound('success');
+      showToast('Wire Decrypted & Verified!');
+    } catch (err) {
+      showToast(err.message || 'Retrieval failed');
+      pinCells.forEach(c => c.value = '');
+      pinCells[0].focus();
+    } finally {
+      btnFetchDrop.disabled = false;
+    }
+  }
+
+  function displayDecryptedDrop(drop) {
+    activeDropData = drop;
+
+    // Expiry and Burn status
+    startExpiryCountdown(drop.expiresAt, receiveExpiryText, 'EXPIRING IN: ');
+    if (drop.burnAfterRead) {
+      receiveBurnNotice.classList.remove('hidden');
+    } else {
+      receiveBurnNotice.classList.add('hidden');
+    }
+
+    // Decrypted Text
+    if (drop.text) {
+      receivedTextContainer.classList.remove('hidden');
+      receivedTextContent.textContent = drop.text;
+    } else {
+      receivedTextContainer.classList.add('hidden');
+    }
+
+    // Separate Images & Files
+    const files = drop.files || [];
+    const images = files.filter(f => f.type && f.type.startsWith('image/'));
+    const nonImages = files.filter(f => !f.type || !f.type.startsWith('image/'));
+
+    // Render Images
+    if (images.length > 0) {
+      receivedImagesContainer.classList.remove('hidden');
+      imagesCount.textContent = images.length;
+      receivedImagesGrid.innerHTML = '';
+
+      images.forEach(img => {
+        const card = document.createElement('div');
+        card.className = 'received-image-card';
+        card.innerHTML = `
+          <img src="${img.dataBase64}" class="received-img-preview" alt="${escapeHtml(img.name)}">
+          <div class="received-img-footer">
+            <span class="received-img-name">${escapeHtml(img.name)}</span>
+            <a href="${img.dataBase64}" download="${escapeHtml(img.name)}" class="deco-btn deco-btn-outline xs">SAVE</a>
+          </div>
+        `;
         receivedImagesGrid.appendChild(card);
       });
     } else {
       receivedImagesContainer.classList.add('hidden');
-      receivedImagesGrid.innerHTML = '';
     }
 
-    // All Files List
-    if (drop.files.length > 0) {
+    // Render Files
+    if (nonImages.length > 0) {
       receivedFilesContainer.classList.remove('hidden');
-      receivedFilesCount.textContent = drop.files.length.toString();
+      filesCount.textContent = nonImages.length;
       receivedFilesList.innerHTML = '';
 
-      drop.files.forEach((file) => {
-        const fileUrl = `/api/file/${drop.code}/${file.id}`;
+      nonImages.forEach(file => {
         const row = document.createElement('div');
-        row.className = 'file-item-row';
-
-        const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
-
+        row.className = 'received-file-row';
         row.innerHTML = `
-          <div class="file-item-info">
-            <span class="file-ext-tag">${ext.slice(0, 4)}</span>
-            <div>
-              <div class="file-item-name">${file.name}</div>
-              <div class="file-item-size">${formatBytes(file.size)}</div>
-            </div>
+          <div class="received-file-info">
+            <span class="received-file-name">${escapeHtml(file.name)}</span>
+            <span class="received-file-meta">${formatFileSize(file.size)} • ${file.type || 'Document'}</span>
           </div>
-          <a href="${fileUrl}?download=1" download="${file.name}" class="news-btn-primary small-btn">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            <span>DOWNLOAD</span>
-          </a>
+          <a href="${file.dataBase64}" download="${escapeHtml(file.name)}" class="deco-btn deco-btn-outline xs">DOWNLOAD</a>
         `;
-
         receivedFilesList.appendChild(row);
       });
     } else {
       receivedFilesContainer.classList.add('hidden');
-      receivedFilesList.innerHTML = '';
-    }
-  }
-
-  // --- Countdown Timer Helper ---
-  function startExpiryCountdown(elem, expiresAt) {
-    if (state.timerInterval) clearInterval(state.timerInterval);
-
-    function update() {
-      const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
-      if (remaining <= 0) {
-        elem.textContent = 'EXPIRED';
-        clearInterval(state.timerInterval);
-        return;
-      }
-      const mins = Math.floor(remaining / 60);
-      const secs = remaining % 60;
-      elem.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
 
-    update();
-    state.timerInterval = setInterval(update, 1000);
+    showView('content');
   }
 
-  // --- Download All as ZIP (JSZip) ---
-  btnDownloadAllZip.addEventListener('click', async () => {
-    if (!state.currentDrop || !state.currentDrop.files.length) return;
-    if (!window.JSZip) {
-      showToast('ZIP library is loading...');
+  // --- ZIP ARCHIVE CREATION ---
+  async function downloadAllFilesAsZip() {
+    if (!activeDropData || !activeDropData.files || !activeDropData.files.length) return;
+    if (typeof JSZip === 'undefined') {
+      showToast('Archiver library unavailable');
       return;
     }
 
+    btnDownloadAllZip.textContent = 'ARCHIVING...';
     btnDownloadAllZip.disabled = true;
-    showToast('Compressing archive into ZIP...');
 
     try {
-      const zip = new window.JSZip();
-      for (const file of state.currentDrop.files) {
-        const fileUrl = `/api/file/${state.currentDrop.code}/${file.id}`;
-        const res = await fetch(fileUrl);
-        const blob = await res.blob();
-        zip.file(file.name, blob);
+      const zip = new JSZip();
+      for (const file of activeDropData.files) {
+        const base64Data = file.dataBase64.split(',')[1];
+        zip.file(file.name, base64Data, { base64: true });
       }
 
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const downloadUrl = URL.createObjectURL(zipBlob);
+      if (activeDropData.text) {
+        zip.file('memorandum.txt', activeDropData.text);
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(content);
       const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `daily-drop-${state.currentDrop.code}.zip`;
+      a.href = url;
+      a.download = `wire_dispatch_${activeDropData.code || 'archive'}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(downloadUrl);
-      showToast('ZIP archive downloaded successfully.');
-      playSuccessChime();
-    } catch (err) {
-      showToast('Failed to create ZIP archive.');
+      URL.revokeObjectURL(url);
+
+      playSound('success');
+      showToast('ZIP Archive Downloaded');
+    } catch (e) {
+      showToast('ZIP compression failed');
     } finally {
+      btnDownloadAllZip.textContent = 'DOWNLOAD ALL (ZIP)';
       btnDownloadAllZip.disabled = false;
     }
-  });
-
-  // --- Camera QR Scanner (Html5Qrcode) ---
-  keypadBtnQr.addEventListener('click', async () => {
-    modalScanner.classList.remove('hidden');
-    if (window.Html5Qrcode) {
-      try {
-        state.html5QrScanner = new window.Html5Qrcode('qr-reader');
-        await state.html5QrScanner.start(
-          { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 220, height: 220 } },
-          (decodedText) => {
-            handleScannedQr(decodedText);
-          },
-          () => {}
-        );
-      } catch (err) {
-        showToast('Camera access required for scanner.');
-        closeQrScanner();
-      }
-    }
-  });
-
-  function closeQrScanner() {
-    if (state.html5QrScanner) {
-      state.html5QrScanner
-        .stop()
-        .then(() => state.html5QrScanner.clear())
-        .catch(() => {});
-      state.html5QrScanner = null;
-    }
-    modalScanner.classList.add('hidden');
   }
 
-  function handleScannedQr(qrData) {
-    closeQrScanner();
-    playSuccessChime();
+  // --- COUNTDOWN TIMER ---
+  function startExpiryCountdown(expiresAtIso, targetEl, prefix = '') {
+    if (countdownTimer) clearInterval(countdownTimer);
+    if (!expiresAtIso || !targetEl) return;
 
-    let code = qrData.trim();
-    if (code.includes('/')) {
-      const parts = code.split('/');
-      code = parts[parts.length - 1] || parts[parts.length - 2];
+    const expiryTime = new Date(expiresAtIso).getTime();
+
+    function update() {
+      const now = Date.now();
+      const diff = Math.max(0, expiryTime - now);
+      const totalSec = Math.floor(diff / 1000);
+      const mins = Math.floor(totalSec / 60);
+      const secs = totalSec % 60;
+      targetEl.textContent = `${prefix}${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+      if (diff <= 0) {
+        clearInterval(countdownTimer);
+        targetEl.textContent = `${prefix}EXPIRED`;
+      }
     }
 
-    if (code && code.length >= 4) {
-      state.enteredPin = code.slice(0, 4).toUpperCase();
-      updatePinBoxes();
-    }
+    update();
+    countdownTimer = setInterval(update, 1000);
   }
 
-  btnCloseScanner.addEventListener('click', closeQrScanner);
-
-  // --- Camera Snap Direct Capture ---
-  btnCameraSnap.addEventListener('click', async () => {
-    try {
-      modalCameraSnap.classList.remove('hidden');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
-      });
-      state.cameraStream = stream;
-      cameraVideo.srcObject = stream;
-    } catch (err) {
-      showToast('Camera not available or permission denied.');
-      modalCameraSnap.classList.add('hidden');
-    }
-  });
-
-  function closeCameraModal() {
-    if (state.cameraStream) {
-      state.cameraStream.getTracks().forEach((track) => track.stop());
-      state.cameraStream = null;
-    }
-    modalCameraSnap.classList.add('hidden');
-  }
-
-  btnCloseCamera.addEventListener('click', closeCameraModal);
-
-  btnTriggerSnap.addEventListener('click', () => {
-    if (!cameraVideo.videoWidth) return;
-    cameraCanvas.width = cameraVideo.videoWidth;
-    cameraCanvas.height = cameraVideo.videoHeight;
-    const ctx = cameraCanvas.getContext('2d');
-    ctx.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
-
-    const dataUrl = cameraCanvas.toDataURL('image/jpeg', 0.9);
-    const filename = `press_photo_${new Date().toISOString().replace(/[:.]/g, '-')}.jpg`;
-
-    state.selectedFiles.push({
-      name: filename,
-      size: Math.round(dataUrl.length * 0.75),
-      type: 'image/jpeg',
-      dataBase64: dataUrl,
-      previewUrl: dataUrl,
-    });
-
-    renderSelectedFiles();
-    closeCameraModal();
-    showToast('Photograph attached to dispatch.');
-    playSuccessChime();
-  });
-
-  // --- Lightbox Viewer ---
-  btnCloseLightbox.addEventListener('click', () => {
-    modalLightbox.classList.add('hidden');
-  });
-
-  modalLightbox.addEventListener('click', (e) => {
-    if (e.target === modalLightbox) {
-      modalLightbox.classList.add('hidden');
-    }
-  });
-
-  // --- Global Event Listeners ---
-  btnCopyPinCode.addEventListener('click', () => {
-    navigator.clipboard.writeText(sharePinCode.textContent);
-    showToast('PIN code copied to clipboard.');
-    playBeep(800);
-  });
-
-  btnCopyShareUrl.addEventListener('click', () => {
-    navigator.clipboard.writeText(shareDirectUrl.value);
-    showToast('Direct telegraph link copied.');
-    playBeep(800);
-  });
-
-  btnCopyReceivedText.addEventListener('click', () => {
-    navigator.clipboard.writeText(receivedTextContent.textContent);
-    copyTextBtnLabel.textContent = '[COPIED]';
-    showToast('Wire text copied.');
-    playBeep(800);
-    setTimeout(() => {
-      copyTextBtnLabel.textContent = '[COPY TEXT]';
-    }, 2000);
-  });
-
-  // Navigation Buttons
-  nav.brand.addEventListener('click', () => switchView('pin'));
-  nav.btnEnterPin.addEventListener('click', () => switchView('pin'));
-  nav.btnSend.addEventListener('click', () => switchView('send'));
-  btnGotoSend.addEventListener('click', () => switchView('send'));
-  btnDoneShare.addEventListener('click', () => switchView('send'));
-  btnReceiveDone.addEventListener('click', () => {
-    state.enteredPin = '';
-    updatePinBoxes();
-    switchView('pin');
-  });
-
-  btnCreateDrop.addEventListener('click', createDrop);
-
-  // Keypad Number Buttons
-  keypadBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      handlePinInput(btn.dataset.val);
-    });
-  });
-
-  keypadBtnBackspace.addEventListener('click', handlePinBackspace);
-
-  // Physical Keyboard Input
-  document.addEventListener('keydown', (e) => {
-    if (state.currentView === 'pin') {
-      if (e.key >= '0' && e.key <= '9') {
-        handlePinInput(e.key);
-      } else if (e.key === 'Backspace') {
-        handlePinBackspace();
-      }
-    }
-  });
-
-  // Drag & Drop
-  dropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropzone.classList.add('drag-over');
-  });
-
-  dropzone.addEventListener('dragleave', () => {
-    dropzone.classList.remove('drag-over');
-  });
-
-  dropzone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('drag-over');
-    if (e.dataTransfer && e.dataTransfer.files) {
-      addFiles(Array.from(e.dataTransfer.files));
-    }
-  });
-
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files) {
-      addFiles(Array.from(fileInput.files));
-      fileInput.value = '';
-    }
-  });
-
-  // Clipboard Paste Support
-  window.addEventListener('paste', (e) => {
-    if (state.currentView === 'send') {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-
-      const pastedFiles = [];
-      for (const item of items) {
-        if (item.kind === 'file') {
-          const file = item.getAsFile();
-          if (file) pastedFiles.push(file);
-        }
-      }
-
-      if (pastedFiles.length > 0) {
-        addFiles(pastedFiles);
-        showToast(`Pasted ${pastedFiles.length} file(s) from clipboard.`);
-      }
-    }
-  });
-
-  // --- Initial Direct Route / Hash Check ---
-  function checkInitialRoute() {
+  // --- DIRECT PIN ROUTE ---
+  function checkDirectPinRoute() {
     const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
-    const hash = window.location.hash.replace(/^#+/, '');
-    const searchParams = new URLSearchParams(window.location.search);
-    const pinParam = searchParams.get('pin') || searchParams.get('code');
-
-    const targetCode = pinParam || (path.length >= 4 && path.length <= 8 ? path : hash);
-
-    if (targetCode && /^[0-9A-Za-z]{4,8}$/.test(targetCode)) {
-      state.enteredPin = targetCode.slice(0, 4).toUpperCase();
-      updatePinBoxes();
-      switchView('pin');
-    } else {
-      switchView('pin');
+    if (/^\d{4}$/.test(path)) {
+      path.split('').forEach((d, i) => {
+        if (pinCells[i]) pinCells[i].value = d;
+      });
+      fetchDropByPin(path);
     }
   }
 
-  checkInitialRoute();
+  // --- HELPERS ---
+  function resetSendForm() {
+    inputText.value = '';
+    stagedFiles = [];
+    renderStagedFiles();
+    fileInput.value = '';
+  }
+
+  function formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  function escapeHtml(str) {
+    return (str || '').replace(/[&<>"']/g, function (m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+  }
+
+  function showToast(msg) {
+    const shelf = document.getElementById('toast-container');
+    if (!shelf) return;
+    const toast = document.createElement('div');
+    toast.className = 'deco-toast';
+    toast.innerHTML = `<span class="toast-diamond">◆</span> <span>${escapeHtml(msg)}</span>`;
+    shelf.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(40px)';
+      toast.style.transition = 'all 300ms ease-out';
+      setTimeout(() => toast.remove(), 300);
+    }, 3200);
+  }
+
+  // Run on DOM loaded
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();

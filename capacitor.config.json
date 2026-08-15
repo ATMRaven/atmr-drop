@@ -1,17 +1,17 @@
 {
   "appId": "com.atmr.drop",
-  "appName": "The Daily Drop",
+  "appName": "ATMR Drop",
   "webDir": "public",
   "bundledWebRuntime": false,
   "plugins": {
     "StatusBar": {
       "style": "DARK",
-      "backgroundColor": "#F9F9F7",
+      "backgroundColor": "#0A0A0A",
       "overlaysWebView": false
     },
     "SplashScreen": {
       "launchShowDuration": 1200,
-      "backgroundColor": "#F9F9F7",
+      "backgroundColor": "#0A0A0A",
       "showSpinner": false
     }
   },

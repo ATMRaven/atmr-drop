@@ -2,464 +2,354 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>THE DAILY DROP • atmr-drop • Published by atmr</title>
-  <meta name="description" content="All the files that are fit to print. Instant cross-device encrypted file, photo, and text wire dispatch.">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  
-  <!-- Google Fonts: Newsprint Typography Stack -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATMR DROP • L'Express Wire Dispatch</title>
+  <meta name="description" content="Opulent, instantaneous cross-device wireless file and text transmission on Cloudflare. The Gatsby Aesthetic.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,700&display=block" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css">
+  <!-- Art Deco Typography: Marcellus (Display/Headings), Italiana (Decorative), Josefin Sans (Geometric Body) -->
+  <link href="https://fonts.googleapis.com/css2?family=Italiana&family=Josefin+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Marcellus&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
-<body class="newsprint-body">
-  <div class="newsprint-texture-overlay"></div>
+<body>
 
-  <!-- Newspaper Master Container -->
-  <div class="newspaper-wrapper">
+  <!-- Ambient Diagonal Crosshatch & Sunburst Background Layer -->
+  <div class="deco-bg-texture" aria-hidden="true"></div>
+  <div class="deco-sunburst-glow" aria-hidden="true"></div>
 
-    <!-- Top Edition Metadata Header -->
-    <div class="newspaper-topbar">
-      <div class="topbar-left">
-        <span class="meta-item">VOL. I • NO. 1</span>
-        <span class="meta-sep">|</span>
-        <span class="meta-item" id="current-newspaper-date">NEW YORK & GLOBAL EDITION</span>
-      </div>
-      <div class="topbar-center">
-        <span class="meta-badge-breaking">★ WIRE DISPATCH SERVICE ★</span>
-      </div>
-      <div class="topbar-right">
-        <span class="meta-item">PRICE: FREE</span>
-        <span class="meta-sep">|</span>
-        <span class="meta-item">PUBLISHED BY <strong>ATMR</strong></span>
-      </div>
-    </div>
+  <!-- Main Luxury Container -->
+  <div class="deco-app-wrapper">
 
-    <!-- Newspaper Masthead -->
-    <header class="newspaper-masthead">
-      <div class="masthead-decor-line double-top"></div>
+    <!-- Top Grand Architectural Masthead -->
+    <header class="deco-header" id="deco-main-header">
       
-      <div class="masthead-main">
-        <div class="masthead-flourish left">✦ ✦ ✦</div>
-        <div class="masthead-title-block">
-          <h1 class="newspaper-title" id="nav-brand" role="button" tabindex="0">THE DAILY DROP</h1>
-          <p class="newspaper-tagline">“All the Files, Photos & Text That Are Fit to Transmit”</p>
+      <!-- Top Filigree Bar -->
+      <div class="deco-top-bar">
+        <span class="deco-edition-tag">EST. 1925 • GLOBAL METROPOLIS WIRE</span>
+        <div class="deco-bar-center">
+          <span class="deco-diamond-mini"></span>
+          <span class="deco-diamond-mini"></span>
+          <span class="deco-diamond-mini"></span>
         </div>
-        <div class="masthead-flourish right">✦ ✦ ✦</div>
+        <span class="deco-edition-tag" id="deco-edition-date">SATURDAY, AUGUST 15, 1925</span>
       </div>
 
-      <div class="masthead-decor-line double-bottom"></div>
+      <!-- Main Title Block with Central Symmetry -->
+      <div class="deco-title-block">
+        <div class="deco-pillar-ornament left" aria-hidden="true">
+          <div class="deco-pillar-line"></div>
+          <div class="deco-pillar-diamond">✦</div>
+        </div>
 
-      <!-- Navigation & Mode Switcher Bar -->
-      <nav class="newspaper-nav-bar">
-        <div class="nav-left-section">
-          <span class="section-label-mono">DISPATCH DESK:</span>
-          <button id="nav-btn-enter-pin" class="news-nav-tab active">
-            <span class="tab-num">[1]</span> ENTER ROOM PIN
+        <div class="deco-masthead-center">
+          <div class="deco-kicker">CLOUDFLARE ENCRYPTED WIRE SERVICE</div>
+          <h1 class="deco-grand-title">ATMR DROP</h1>
+          <div class="deco-sub-marquee">
+            <span class="deco-line-left"></span>
+            <span class="deco-motto">L'EXPRESS WIRELESS DISPATCH</span>
+            <span class="deco-line-right"></span>
+          </div>
+        </div>
+
+        <div class="deco-pillar-ornament right" aria-hidden="true">
+          <div class="deco-pillar-diamond">✦</div>
+          <div class="deco-pillar-line"></div>
+        </div>
+      </div>
+
+      <!-- Navigation & Mode Switcher -->
+      <nav class="deco-nav-strip" aria-label="Dispatch Navigation">
+        <div class="deco-nav-group">
+          <button id="nav-mode-receive" class="deco-btn deco-btn-nav active" aria-label="Retrieve wire by PIN">
+            <span class="deco-btn-roman">I</span>
+            <span class="deco-btn-label">RETRIEVE WIRE</span>
           </button>
-          <button id="nav-btn-send" class="news-nav-tab">
-            <span class="tab-num">[2]</span> DISPATCH NEW DROP
+          <button id="nav-mode-send" class="deco-btn deco-btn-nav" aria-label="Dispatch new wire">
+            <span class="deco-btn-roman">II</span>
+            <span class="deco-btn-label">DISPATCH WIRE</span>
           </button>
         </div>
-        <div class="nav-right-section">
-          <span class="live-status-pill"><span class="ink-dot pulse"></span> CLOUDFLARE KV ONLINE</span>
+
+        <div class="deco-system-status">
+          <span class="deco-status-indicator"></span>
+          <span class="deco-status-text">CLOUDFLARE KV ONLINE</span>
         </div>
       </nav>
 
-      <!-- Breaking News Ticker -->
-      <div class="breaking-news-ticker">
-        <div class="ticker-label">BREAKING WIRE</div>
-        <div class="ticker-marquee">
-          <span class="ticker-text">
-            ● INSTANT CROSS-DEVICE ENCRYPTED DISPATCH ACTIVE ● NO ACCOUNTS OR PASSWORDS REQUIRED ● DYNAMIC TTL 1 MIN TO 24 HOURS ● DIRECT ROUTE: DROP.ATMR.WORKERS.DEV/:PIN ● POWERED BY SERVERLESS KV ●
-          </span>
-        </div>
+      <!-- Decorative Divider -->
+      <div class="deco-fleuron-divider" aria-hidden="true">
+        <div class="fleuron-line"></div>
+        <div class="fleuron-motif">✦ ━ ✦ ━ ✦</div>
+        <div class="fleuron-line"></div>
       </div>
     </header>
 
-    <!-- Main Content Editorial Body -->
-    <main class="newspaper-body-content">
-      
-      <!-- ================= VIEW 1: ENTER PIN (RECEIVE/HOME) ================= -->
-      <section id="view-pin" class="view-panel active">
-        <div class="editorial-columns-grid">
-          
-          <!-- Column 1: PIN Keypad Terminal -->
-          <div class="editorial-col main-terminal-col">
-            <div class="column-header">
-              <span class="col-kicker">SECTION A • WIRE TERMINAL</span>
-              <h2 class="col-headline">Receive Wire with 4-Digit PIN</h2>
-              <div class="rule-thin"></div>
-            </div>
+    <!-- Main Dynamic Content Desk -->
+    <main class="deco-main-stage" id="deco-content-stage">
 
-            <p class="col-lead">
-              Enter the four-digit transmission code displayed on the sending screen to decrypt and download text, high-resolution photographs, and attached files immediately.
-            </p>
+      <!-- ================= SECTION I: RECEIVE / RETRIEVE BY PIN ================= -->
+      <section id="view-receive-input" class="deco-card stepped-card active" aria-labelledby="heading-receive">
+        <div class="card-corner-bracket top-left" aria-hidden="true"></div>
+        <div class="card-corner-bracket top-right" aria-hidden="true"></div>
+        <div class="card-corner-bracket bottom-left" aria-hidden="true"></div>
+        <div class="card-corner-bracket bottom-right" aria-hidden="true"></div>
 
-            <!-- 4-Box PIN Display -->
-            <div class="pin-display-wrapper">
-              <div class="pin-boxes" id="pin-boxes">
-                <div class="pin-box" data-index="0">_</div>
-                <div class="pin-box" data-index="1">_</div>
-                <div class="pin-box" data-index="2">_</div>
-                <div class="pin-box" data-index="3">_</div>
-              </div>
-              <input type="text" id="pin-hidden-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" autofocus aria-label="Enter 4-digit PIN">
-            </div>
+        <div class="card-header-bar">
+          <span class="card-roman-badge">SECTION I</span>
+          <h2 id="heading-receive" class="card-headline">ENTER WIRE TRANSMISSION PIN</h2>
+          <span class="card-header-sub">INPUT 4-DIGIT CODE FROM SENDER</span>
+        </div>
 
-            <!-- Keypad for Touch / Mouse -->
-            <div class="keypad-container">
-              <div class="keypad-grid">
-                <button class="keypad-btn" data-val="1">1</button>
-                <button class="keypad-btn" data-val="2">2</button>
-                <button class="keypad-btn" data-val="3">3</button>
-                <button class="keypad-btn" data-val="4">4</button>
-                <button class="keypad-btn" data-val="5">5</button>
-                <button class="keypad-btn" data-val="6">6</button>
-                <button class="keypad-btn" data-val="7">7</button>
-                <button class="keypad-btn" data-val="8">8</button>
-                <button class="keypad-btn" data-val="9">9</button>
-                <button class="keypad-btn action-btn" id="keypad-btn-qr" title="Scan QR Code">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                  <span class="btn-label-micro">SCAN QR</span>
-                </button>
-                <button class="keypad-btn" data-val="0">0</button>
-                <button class="keypad-btn action-btn" id="keypad-btn-backspace" title="Backspace">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>
-                  <span class="btn-label-micro">CLEAR</span>
-                </button>
-              </div>
-            </div>
+        <div class="card-inner-body">
+          <p class="deco-lead-text">
+            Enter the four-digit code displayed on the sending device or camera to retrieve instant files, photos, and encrypted text snippets.
+          </p>
 
-            <div class="pin-status" id="pin-status-msg"></div>
-
-            <div class="ornament-divider">✦ ✦ ✦</div>
+          <!-- 4-Digit PIN Boxes -->
+          <div class="deco-pin-display-group">
+            <input type="text" id="pin-digit-1" class="deco-pin-cell" maxlength="1" inputmode="numeric" pattern="[0-9]*" autofocus autocomplete="off" aria-label="First digit">
+            <input type="text" id="pin-digit-2" class="deco-pin-cell" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Second digit">
+            <input type="text" id="pin-digit-3" class="deco-pin-cell" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Third digit">
+            <input type="text" id="pin-digit-4" class="deco-pin-cell" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Fourth digit">
           </div>
 
-          <!-- Column 2: Editorial Instructions & Quick Switch -->
-          <div class="editorial-col sidebar-col">
-            <div class="column-header">
-              <span class="col-kicker">DISPATCH DIRECTIVE</span>
-              <h3 class="col-subheadline">Instant Local & Global Transmission</h3>
-              <div class="rule-thin"></div>
-            </div>
-
-            <div class="editorial-article">
-              <p class="dropcap-paragraph">
-                <span class="dropcap">T</span>ransmit articles, snippets, images, and archives seamlessly across any pair of screens connected via local network or the global internet. No client installation or user registration is required.
-              </p>
-
-              <div class="quote-box">
-                <p>“Simplicity is the ultimate sophistication. Type four numbers, and the wire arrives.”</p>
-                <span class="quote-author">— ATMR PUBLISHING HOUSE</span>
-              </div>
-
-              <div class="editorial-feature-list">
-                <div class="feature-item">
-                  <span class="feature-bullet">■</span>
-                  <div>
-                    <strong>Direct Link Routing:</strong>
-                    <span>Share <code>drop.atmr.workers.dev/1234</code> to open instantly on mobile.</span>
-                  </div>
-                </div>
-                <div class="feature-item">
-                  <span class="feature-bullet">■</span>
-                  <div>
-                    <strong>Burn-After-Reading:</strong>
-                    <span>Enforce cryptographic single-use delivery that self-destructs upon pickup.</span>
-                  </div>
-                </div>
-                <div class="feature-item">
-                  <span class="feature-bullet">■</span>
-                  <div>
-                    <strong>Dynamic Lifetimes:</strong>
-                    <span>Preserve wire dispatches from 60 seconds up to 24 full hours.</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="rule-thick"></div>
-
-              <!-- Quick Switch CTA Card -->
-              <div class="news-cta-box" id="btn-goto-send" role="button" tabindex="0">
-                <span class="cta-kicker">READY TO TRANSMIT?</span>
-                <h4 class="cta-heading">Compose New Wire Dispatch →</h4>
-                <p class="cta-sub">Upload files, paste articles, or snap a camera photo.</p>
-              </div>
-            </div>
+          <!-- Vintage Keypad -->
+          <div class="deco-keypad-grid" aria-label="Numerical Keypad">
+            <button type="button" class="deco-btn-key" data-key="1">1</button>
+            <button type="button" class="deco-btn-key" data-key="2">2</button>
+            <button type="button" class="deco-btn-key" data-key="3">3</button>
+            <button type="button" class="deco-btn-key" data-key="4">4</button>
+            <button type="button" class="deco-btn-key" data-key="5">5</button>
+            <button type="button" class="deco-btn-key" data-key="6">6</button>
+            <button type="button" class="deco-btn-key" data-key="7">7</button>
+            <button type="button" class="deco-btn-key" data-key="8">8</button>
+            <button type="button" class="deco-btn-key" data-key="9">9</button>
+            <button type="button" class="deco-btn-key deco-key-action" data-key="clear">CLR</button>
+            <button type="button" class="deco-btn-key" data-key="0">0</button>
+            <button type="button" class="deco-btn-key deco-key-action" data-key="backspace">⌫</button>
           </div>
 
+          <div class="card-action-footer">
+            <button id="btn-fetch-drop" class="deco-btn deco-btn-solid full-width">
+              <span class="btn-text">RETRIEVE WIRE DISPATCH</span>
+              <span class="btn-arrow">⟶</span>
+            </button>
+          </div>
         </div>
       </section>
 
-      <!-- ================= VIEW 2: SEND DROP (CREATE) ================= -->
-      <section id="view-send" class="view-panel">
-        <div class="editorial-container">
+      <!-- ================= SECTION II: SEND / WIRE COMPOSITION DESK ================= -->
+      <section id="view-send" class="deco-card stepped-card" aria-labelledby="heading-send">
+        <div class="card-corner-bracket top-left" aria-hidden="true"></div>
+        <div class="card-corner-bracket top-right" aria-hidden="true"></div>
+        <div class="card-corner-bracket bottom-left" aria-hidden="true"></div>
+        <div class="card-corner-bracket bottom-right" aria-hidden="true"></div>
+
+        <div class="card-header-bar">
+          <span class="card-roman-badge">SECTION II</span>
+          <h2 id="heading-send" class="card-headline">COMPOSE WIRE DISPATCH</h2>
+          <span class="card-header-sub">ATTACH DOCUMENTS, PHOTOGRAPHS &amp; MEMORANDA</span>
+        </div>
+
+        <div class="card-inner-body">
           
-          <div class="section-title-box">
-            <span class="col-kicker">SECTION B • COMPOSITION DESK</span>
-            <h2 class="col-headline">Draft a New Wire Dispatch</h2>
-            <p class="col-lead">Attach documents, photographs, or text dispatches. Choose your retention time and transmit to the cloud.</p>
-            <div class="rule-double"></div>
+          <!-- Text Memo / Snippet Input -->
+          <div class="deco-form-group">
+            <label for="input-text" class="deco-label">
+              <span class="label-diamond">◆</span> MEMORANDUM / TEXT SNIPPET
+            </label>
+            <textarea id="input-text" class="deco-input-memo" rows="4" placeholder="Type or paste your message, link, code snippet, or memorandum here..."></textarea>
           </div>
 
-          <!-- Newspaper Layout: 2 Columns for Send Form -->
-          <div class="send-grid-layout">
+          <!-- Media & Documents Dropzone -->
+          <div class="deco-form-group">
+            <label class="deco-label">
+              <span class="label-diamond">◆</span> PRESS PHOTOGRAPHS &amp; FILES DEPOSIT
+            </label>
             
-            <!-- Left Side: Dropzone and Text Editor -->
-            <div class="send-main-column">
+            <div id="dropzone" class="deco-dropzone-box" role="region" aria-label="File drop area">
+              <input type="file" id="file-input" class="hidden-input" multiple>
               
-              <!-- File Dropzone -->
-              <div class="newsprint-box-bordered">
-                <div class="box-header-ribbon">
-                  <span>ATTACH MEDIA & DOCUMENTS (FIG. 2.1)</span>
-                </div>
-                
-                <div class="dropzone" id="file-dropzone">
-                  <input type="file" id="file-input" multiple class="file-input-hidden">
-                  <div class="dropzone-content">
-                    <div class="dropzone-icon-box">
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m16 16-4-4-4 4"></path></svg>
-                    </div>
-                    <div class="dropzone-text">
-                      <span class="dropzone-primary">DRAG & DROP FILES OR PHOTOGRAPHS</span>
-                      <span class="dropzone-secondary">or <span class="browse-link">browse local storage</span> • paste clipboard with Ctrl+V</span>
-                    </div>
-                    <div class="dropzone-actions">
-                      <button type="button" class="news-btn-outline" id="btn-camera-snap">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                        <span>SNAP CAMERA</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Selected Files Grid Preview -->
-                <div class="selected-files-container hidden" id="selected-files-container">
-                  <div class="section-label-bar">
-                    <span>ATTACHED MANIFEST (<span id="files-count">0</span> FILES)</span>
-                    <button type="button" class="news-link-btn" id="btn-clear-files">[CLEAR ALL]</button>
-                  </div>
-                  <div class="file-cards-grid" id="file-cards-grid"></div>
+              <div class="dropzone-art-deco-icon" aria-hidden="true">
+                <div class="icon-diamond-frame">
+                  <span class="icon-inner">✦</span>
                 </div>
               </div>
+              
+              <p class="dropzone-prompt">DEPOSIT FILES OR CLICK TO BROWSE</p>
+              <p class="dropzone-specs">Supports Images, Documents, Archives &amp; Audio (Up to 100MB Total)</p>
 
-              <!-- Text/Code Snippet Editor -->
-              <div class="newsprint-box-bordered">
-                <div class="box-header-ribbon">
-                  <span>DISPATCH TEXT / CODE REEL (OPTIONAL)</span>
-                  <button type="button" class="news-link-btn" id="btn-paste-clipboard">[PASTE FROM CLIPBOARD]</button>
-                </div>
-                <div class="textarea-wrapper">
-                  <textarea id="text-input" placeholder="Type or paste wire telegrams, credentials, code blocks, or links here..." rows="5"></textarea>
-                  <div class="textarea-footer">
-                    <span id="char-count" class="char-count">0 CHARACTERS</span>
-                    <button type="button" class="news-link-btn" id="btn-clear-text" title="Clear text">[CLEAR TEXT]</button>
-                  </div>
-                </div>
+              <div class="dropzone-camera-row">
+                <button type="button" id="btn-camera" class="deco-btn deco-btn-outline sm">
+                  <span class="btn-icon">📷</span> CAPTURE PHOTOGRAPH
+                </button>
               </div>
-
             </div>
 
-            <!-- Right Side: Options & Publication Panel -->
-            <div class="send-side-column">
-              
-              <div class="newsprint-box-bordered publication-card">
-                <div class="box-header-ribbon dark">
-                  <span>TRANSMISSION PARAMETERS</span>
-                </div>
+            <!-- Staged Files Manifest -->
+            <div id="staged-files-list" class="deco-staged-manifest hidden">
+              <div class="manifest-header">STAGED ENCLOSURES (<span id="file-count-badge">0</span>)</div>
+              <ul id="staged-files-items" class="manifest-ul"></ul>
+            </div>
+          </div>
 
-                <!-- Dynamic TTL Selector -->
-                <div class="option-section">
-                  <label class="option-label-title">
-                    <span>1. RETENTION LIFETIME:</span>
-                  </label>
-                  <p class="option-helper">Wire will automatically purge from KV storage after this duration.</p>
-                  
-                  <div class="ttl-chips-grid" id="ttl-chips">
-                    <button type="button" class="ttl-chip" data-ttl="60">1 MIN FLASH</button>
-                    <button type="button" class="ttl-chip active" data-ttl="300">5 MINS</button>
-                    <button type="button" class="ttl-chip" data-ttl="900">15 MINS</button>
-                    <button type="button" class="ttl-chip" data-ttl="3600">1 HOUR</button>
-                    <button type="button" class="ttl-chip" data-ttl="21600">6 HOURS</button>
-                    <button type="button" class="ttl-chip" data-ttl="86400">24 HOURS</button>
-                  </div>
-                </div>
-
-                <div class="rule-thin"></div>
-
-                <!-- Burn After Reading Option -->
-                <div class="option-section">
-                  <div class="burn-toggle-row">
-                    <div class="burn-info">
-                      <span class="burn-badge-label">🔥 CLASSIFIED PROTOCOL</span>
-                      <strong class="burn-title">Burn After Reading</strong>
-                      <p class="option-helper">Permanently destroys the room PIN immediately upon the first pickup.</p>
-                    </div>
-                    <label class="news-checkbox-label">
-                      <input type="checkbox" id="toggle-burn" class="news-checkbox">
-                      <span class="custom-checkbox"></span>
-                    </label>
-                  </div>
-                </div>
-
-                <div class="rule-thick"></div>
-
-                <!-- Submit Button -->
-                <div class="publish-action-box">
-                  <button type="button" class="news-btn-primary full-width" id="btn-create-drop">
-                    <span>TRANSMIT WIRE DISPATCH</span>
-                    <span class="btn-arrow">→</span>
-                  </button>
-                </div>
-
-                <div class="upload-progress-container hidden" id="upload-progress-container">
-                  <div class="progress-bar-track">
-                    <div class="progress-bar-fill" id="upload-progress-fill"></div>
-                  </div>
-                  <span class="progress-label" id="upload-progress-label">ENCODING DISPATCH...</span>
-                </div>
-
+          <!-- Configuration: Expiration & Burn Toggle -->
+          <div class="deco-config-grid">
+            <div class="deco-config-column">
+              <label for="select-ttl" class="deco-label">
+                <span class="label-diamond">◆</span> TRANSMISSION RETENTION
+              </label>
+              <div class="deco-select-wrapper">
+                <select id="select-ttl" class="deco-select">
+                  <option value="300">V minutes (5 Minutes Quick)</option>
+                  <option value="900" selected>XV minutes (15 Minutes Standard)</option>
+                  <option value="3600">I hour (1 Hour Extended)</option>
+                  <option value="86400">XXIV hours (24 Hours Archive)</option>
+                </select>
               </div>
-
             </div>
 
+            <div class="deco-config-column">
+              <label class="deco-label">
+                <span class="label-diamond">◆</span> SECURITY PROTOCOL
+              </label>
+              <label class="deco-checkbox-label">
+                <input type="checkbox" id="check-burn" class="deco-checkbox">
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">BURN AFTER RETRIEVAL (AUTODESTRUCT)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Transmit Action Button -->
+          <div class="card-action-footer">
+            <button id="btn-send-drop" class="deco-btn deco-btn-solid full-width">
+              <span class="btn-text">TRANSMIT WIRE DISPATCH</span>
+              <span class="btn-arrow">⟶</span>
+            </button>
           </div>
 
         </div>
       </section>
 
-      <!-- ================= VIEW 3: SHARE DROP (ACTIVE RECEIPT) ================= -->
-      <section id="view-share" class="view-panel">
-        <div class="editorial-container narrow">
+      <!-- ================= SECTION III: SHARE RECEIPT (PIN & QR) ================= -->
+      <section id="view-share" class="deco-card stepped-card" aria-labelledby="heading-share">
+        <div class="card-corner-bracket top-left" aria-hidden="true"></div>
+        <div class="card-corner-bracket top-right" aria-hidden="true"></div>
+        <div class="card-corner-bracket bottom-left" aria-hidden="true"></div>
+        <div class="card-corner-bracket bottom-right" aria-hidden="true"></div>
+
+        <div class="card-header-bar">
+          <span class="card-roman-badge">SECTION III</span>
+          <h2 id="heading-share" class="card-headline">DISPATCH RECEIPT ISSUED</h2>
+          <span class="card-header-sub">ACTIVE IN SECURE KV VAULT</span>
+        </div>
+
+        <div class="card-inner-body text-center">
           
-          <div class="section-title-box text-center">
-            <span class="col-kicker">SECTION C • OFFICIAL DISPATCH RECEIPT</span>
-            <h2 class="col-headline">Wire Transmission Active</h2>
-            <p class="col-lead">Provide the 4-digit PIN to the recipient or have them scan the vector optical matrix.</p>
-            <div class="rule-double"></div>
+          <div class="receipt-ribbon">
+            <span class="ribbon-text">TRANSMISSION ACTIVE &amp; PENDING RECEIVER</span>
           </div>
 
-          <div class="receipt-card">
-            
-            <div class="receipt-header">
-              <span class="receipt-stamp">★ CERTIFIED TRANSMISSION ★</span>
+          <!-- Big 4-Digit PIN Exhibition -->
+          <div class="deco-pin-frame">
+            <div class="pin-frame-label">OFFICIAL 4-DIGIT ROOM PIN</div>
+            <div id="share-pin-code" class="deco-big-pin">----</div>
+            <div class="pin-frame-sub">TYPE THIS PIN ON ANY MACHINE OR PHONE</div>
+          </div>
+
+          <!-- Dual Column: QR Code & Direct Link -->
+          <div class="receipt-details-grid">
+            <div class="receipt-qr-column">
+              <div class="deco-qr-wrapper">
+                <div id="share-qrcode-canvas" class="deco-qr-box"></div>
+              </div>
+              <p class="qr-caption">SCAN WITH CAMERA FOR INSTANT LOAD</p>
             </div>
 
-            <div class="share-grid">
-              <!-- Giant 4-Digit PIN Card -->
-              <div class="pin-classified-box">
-                <span class="pin-box-kicker">ROOM PIN NUMBER</span>
-                <div class="giant-pin-value font-mono" id="share-pin-code">----</div>
-                <button class="news-btn-outline" id="btn-copy-pin-code">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="9" width="13" height="13"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                  <span>COPY PIN</span>
-                </button>
+            <div class="receipt-info-column">
+              <div class="info-block">
+                <div class="info-label">DISPATCH DIRECT URL</div>
+                <div class="deco-input-copy-group">
+                  <input type="text" id="share-direct-url" class="deco-input-url" readonly>
+                  <button id="btn-copy-url" class="deco-btn deco-btn-outline sm">COPY</button>
+                </div>
               </div>
 
-              <!-- Vector QR Code Card -->
-              <div class="qr-classified-box">
-                <div class="qr-canvas-container" id="share-qr-container"></div>
-                <span class="qr-caption font-mono">FIG. 1.1 — OPTICAL WIRE CODE</span>
+              <div class="info-block">
+                <div class="info-label">TIME REMAINING</div>
+                <div id="share-time-left" class="info-val-gold">14:59</div>
               </div>
-            </div>
 
-            <!-- Parameters Bar -->
-            <div class="receipt-meta-bar">
-              <div class="meta-field">
-                <span class="meta-label">EXPIRATION COUNTDOWN:</span>
-                <strong id="share-expiry-timer" class="font-mono countdown-red">--:--</strong>
-              </div>
-              <div class="meta-field" id="share-burn-indicator">
-                <span class="meta-label">DISPATCH SECURITY:</span>
-                <span class="burn-tag-mono">🔥 ONE-TIME BURN</span>
+              <div id="share-burn-badge" class="burn-indicator hidden">
+                🔥 WILL BE PERMANENTLY DESTROYED UPON FIRST RETRIEVAL
               </div>
             </div>
+          </div>
 
-            <!-- Direct URL Bar -->
-            <div class="direct-link-section">
-              <span class="direct-link-label">DIRECT TELEGRAPH URL:</span>
-              <div class="direct-link-box">
-                <input type="text" id="share-direct-url" readonly class="direct-url-input font-mono">
-                <button class="news-btn-primary" id="btn-copy-share-url">
-                  <span>COPY LINK</span>
-                </button>
-              </div>
-            </div>
-
-            <div class="rule-thin"></div>
-
-            <div class="receipt-actions">
-              <button type="button" class="news-btn-outline full-width" id="btn-done-share">
-                <span>COMPOSE ANOTHER WIRE DISPATCH</span>
-              </button>
-            </div>
-
+          <div class="card-action-footer split-footer">
+            <button id="btn-cancel-drop" class="deco-btn deco-btn-outline">
+              DISCARD / PURGE DISPATCH
+            </button>
+            <button id="btn-new-send" class="deco-btn deco-btn-solid">
+              COMPOSE ANOTHER WIRE
+            </button>
           </div>
 
         </div>
       </section>
 
-      <!-- ================= VIEW 4: RECEIVE DROP (VIEW/DOWNLOAD) ================= -->
-      <section id="view-receive" class="view-panel">
-        <div class="editorial-container">
+      <!-- ================= SECTION IV: DECRYPTED VAULT (RECEIVE RESULTS) ================= -->
+      <section id="view-receive-content" class="deco-card stepped-card" aria-labelledby="heading-decrypted">
+        <div class="card-corner-bracket top-left" aria-hidden="true"></div>
+        <div class="card-corner-bracket top-right" aria-hidden="true"></div>
+        <div class="card-corner-bracket bottom-left" aria-hidden="true"></div>
+        <div class="card-corner-bracket bottom-right" aria-hidden="true"></div>
+
+        <div class="card-header-bar">
+          <span class="card-roman-badge">SECTION IV</span>
+          <h2 id="heading-decrypted" class="card-headline">INCOMING WIRE DECRYPTED</h2>
+          <span class="card-header-sub">VERIFIED TRANSMISSION RETRIEVED</span>
+        </div>
+
+        <div class="card-inner-body">
           
-          <div class="section-title-box">
-            <span class="col-kicker">SECTION D • INCOMING WIRE DISPATCH</span>
-            <h2 class="col-headline" id="receive-drop-title">Incoming Wire Decrypted</h2>
-            <p class="col-lead" id="receive-drop-subtitle">Copy received text snippets, view press photographs, or download attached files.</p>
-            <div class="rule-double"></div>
+          <div class="deco-status-ribbon">
+            <span class="status-chip verified">✔ WIRE VERIFIED</span>
+            <span id="receive-expiry-text" class="status-chip expiry">EXPIRING IN: --:--</span>
+            <span id="receive-burn-notice" class="status-chip burn hidden">🔥 DESTROYED ON SENDER VAULT</span>
           </div>
 
-          <div class="receive-status-bar">
-            <div class="status-badge-ink">
-              <span class="ink-dot pulse"></span> WIRE VERIFIED
+          <!-- Received Text Section -->
+          <div id="received-text-container" class="received-block hidden">
+            <div class="block-header">
+              <span class="block-title">DECRYPTED MEMORANDUM</span>
+              <button id="btn-copy-received-text" class="deco-btn deco-btn-outline xs">COPY TEXT</button>
             </div>
-            <div class="status-badge-item">
-              <span>EXPIRING IN: <strong id="receive-expiry-timer" class="font-mono">--:--</strong></span>
-            </div>
-            <div class="status-badge-item" id="receive-burn-badge">
-              <span class="burn-red-text">🔥 BURN-AFTER-READING (DESTRUCT ON RETRIEVAL)</span>
-            </div>
+            <div id="received-text-content" class="received-text-box"></div>
           </div>
 
-          <!-- Received Text/Code Display -->
-          <div class="received-text-box hidden" id="received-text-box">
-            <div class="box-header-ribbon">
-              <span>SHARED WIRE TEXT & SNIPPET</span>
-              <button class="news-link-btn" id="btn-copy-received-text">
-                <span id="copy-text-btn-label">[COPY TEXT]</span>
-              </button>
+          <!-- Received Images Gallery -->
+          <div id="received-images-container" class="received-block hidden">
+            <div class="block-header">
+              <span class="block-title">PRESS PHOTOGRAPHS (<span id="images-count">0</span>)</span>
             </div>
-            <div class="text-content-display font-mono" id="received-text-content"></div>
+            <div id="received-images-grid" class="received-images-grid"></div>
           </div>
 
-          <!-- Images & Photographs Section -->
-          <div class="received-images-container hidden" id="received-images-container">
-            <div class="box-header-ribbon">
-              <span>PRESS PHOTOGRAPHS (<span id="received-images-count">0</span> ATTACHMENTS)</span>
+          <!-- Received Files List -->
+          <div id="received-files-container" class="received-block hidden">
+            <div class="block-header">
+              <span class="block-title">ATTACHED ENCLOSURES (<span id="files-count">0</span>)</span>
+              <button id="btn-download-all-zip" class="deco-btn deco-btn-outline xs">DOWNLOAD ALL (ZIP)</button>
             </div>
-            <div class="images-grid" id="received-images-grid"></div>
+            <div id="received-files-list" class="received-files-table"></div>
           </div>
 
-          <!-- Attached Documents & Files -->
-          <div class="received-files-container hidden" id="received-files-container">
-            <div class="box-header-ribbon">
-              <span>ATTACHED ARCHIVE MANIFEST (<span id="received-files-count">0</span> FILES)</span>
-              <button type="button" class="news-btn-primary small-btn" id="btn-download-all-zip">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                <span>DOWNLOAD ALL AS ZIP</span>
-              </button>
-            </div>
-            <div class="files-download-list" id="received-files-list"></div>
-          </div>
-
-          <div class="rule-thick"></div>
-
-          <div class="receive-actions">
-            <button type="button" class="news-btn-primary" id="btn-receive-done">
-              <span>RECEIVE ANOTHER WIRE</span>
+          <div class="card-action-footer">
+            <button id="btn-receive-another" class="deco-btn deco-btn-solid full-width">
+              RECEIVE ANOTHER WIRE DISPATCH
             </button>
           </div>
 
@@ -468,97 +358,71 @@
 
     </main>
 
-    <!-- Newspaper Colophon / Footer & Watermark -->
-    <footer class="newspaper-footer">
-      <div class="footer-decor-line double-top"></div>
-      
-      <div class="footer-grid">
-        <div class="footer-col brand-col">
-          <span class="footer-kicker">PUBLICATION COLOPHON</span>
-          <h4 class="footer-brand">THE DAILY DROP</h4>
-          <p class="footer-desc">
-            A high-speed, ephemeral cross-screen telegraph for images, documents, and text. Zero registration. Zero trackers.
-          </p>
+    <!-- Grand Art Deco Colophon & Footer -->
+    <footer class="deco-footer" id="deco-main-footer">
+      <div class="deco-fleuron-divider" aria-hidden="true">
+        <div class="fleuron-line"></div>
+        <div class="fleuron-motif">✦ ━ ✦ ━ ✦</div>
+        <div class="fleuron-line"></div>
+      </div>
+
+      <div class="deco-footer-grid">
+        <div class="footer-col">
+          <div class="footer-heading">ARCHITECTURE</div>
+          <p class="footer-copy">Cloudflare Edge Worker • Global Distributed KV Storage • Web Crypto API</p>
         </div>
 
-        <div class="footer-col info-col">
-          <span class="footer-kicker">EDITION & SYSTEM</span>
-          <p class="footer-mono font-mono">
-            EDITION: VOL. 1.0 • ARCHIVE RECORDED<br>
-            HOSTING: CLOUDFLARE WORKERS & KV<br>
-            FORMAT: NEWSPRINT EDITORIAL
-          </p>
-        </div>
-
-        <div class="footer-col watermark-col">
-          <span class="footer-kicker">OFFICIAL WATERMARK</span>
-          <div class="watermark-box">
-            <span class="watermark-stamp">CREATED & PUBLISHED BY</span>
-            <strong class="watermark-author-name">ATMR</strong>
-            <span class="watermark-sub">ALL RIGHTS RESERVED • 2026</span>
+        <div class="footer-col center-col">
+          <div class="footer-monogram">
+            <span class="monogram-diamond">◆</span>
+            <span class="monogram-text">ATMR DROP</span>
+            <span class="monogram-diamond">◆</span>
           </div>
+          <p class="footer-tagline">"The Roaring Twenties Wireless Dispatch"</p>
+        </div>
+
+        <div class="footer-col right-col">
+          <div class="footer-heading">ORIGIN &amp; RIGHTS</div>
+          <p class="footer-copy">Designed &amp; Engineered by <strong>atmr</strong> • All Rights Reserved</p>
         </div>
       </div>
-
-      <div class="footer-bottom-bar">
-        <span>⚡ atmr-drop • Published by atmr • Cloudflare Serverless Wire Service</span>
-        <span>DROP.ATMR.WORKERS.DEV</span>
-      </div>
-      <div class="footer-decor-line double-bottom"></div>
     </footer>
 
   </div>
 
-  <!-- Camera QR Scanner Modal -->
-  <div class="modal-overlay hidden" id="modal-scanner">
-    <div class="news-modal-card">
-      <div class="modal-header-ribbon">
-        <span>OPTICAL QR CODE SCANNER</span>
-        <button class="modal-close-btn" id="btn-close-scanner">[ESC / ×]</button>
+  <!-- Webcam Capture Modal -->
+  <div id="camera-modal" class="deco-modal" aria-hidden="true" role="dialog">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content stepped-card">
+      <div class="card-corner-bracket top-left"></div>
+      <div class="card-corner-bracket top-right"></div>
+      <div class="card-corner-bracket bottom-left"></div>
+      <div class="card-corner-bracket bottom-right"></div>
+
+      <div class="modal-header">
+        <h3 class="modal-title">PRESS PHOTOGRAPH CAPTURE</h3>
+        <button id="btn-camera-close" class="modal-close-btn">&times;</button>
       </div>
-      <div class="scanner-viewfinder" id="scanner-viewfinder">
-        <div id="qr-reader"></div>
+
+      <div class="modal-body">
+        <div class="camera-stream-wrapper">
+          <video id="camera-video" autoplay playsinline></video>
+          <canvas id="camera-canvas" class="hidden"></canvas>
+        </div>
       </div>
-      <div class="modal-footer-bar">
-        <span class="font-mono">ALIGN SENDER SCREEN QR CODE IN VIEWFINDER</span>
+
+      <div class="modal-footer">
+        <button id="btn-camera-snap" class="deco-btn deco-btn-solid">SNAP PHOTOGRAPH</button>
       </div>
     </div>
   </div>
 
-  <!-- Camera Snapshot Modal -->
-  <div class="modal-overlay hidden" id="modal-camera-snap">
-    <div class="news-modal-card camera-modal-card">
-      <div class="modal-header-ribbon">
-        <span>CAMERA PHOTOGRAPH CAPTURE</span>
-        <button class="modal-close-btn" id="btn-close-camera">[ESC / ×]</button>
-      </div>
-      <div class="camera-preview-container">
-        <video id="camera-video" autoplay playsinline></video>
-        <canvas id="camera-canvas" class="hidden"></canvas>
-      </div>
-      <div class="camera-controls-bar">
-        <button class="news-btn-primary" id="btn-trigger-snap" title="Take Photo">
-          <span>CAPTURE PHOTOGRAPH</span>
-        </button>
-      </div>
-    </div>
-  </div>
+  <!-- Toast Alert Notifications -->
+  <div id="toast-container" class="deco-toast-shelf" aria-live="polite"></div>
 
-  <!-- Image Lightbox Modal -->
-  <div class="lightbox-overlay hidden" id="modal-lightbox">
-    <button class="lightbox-close-btn" id="btn-close-lightbox">[CLOSE ×]</button>
-    <div class="lightbox-content">
-      <img id="lightbox-img" src="" alt="Enlarged photo preview">
-    </div>
-  </div>
-
-  <!-- Toast Notification Container -->
-  <div class="toast-container" id="toast-container"></div>
-
-  <!-- Local Vendor Scripts -->
-  <script src="/vendor/qrcode.js"></script>
-  <script src="/vendor/jszip.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="/app.js"></script>
+  <!-- Vendor Scripts for QR and ZIP -->
+  <script src="vendor/qrcode.js"></script>
+  <script src="vendor/jszip.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

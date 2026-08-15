@@ -1,8 +1,108 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-  <rect width="100" height="100" fill="#F9F9F7"/>
-  <rect width="94" height="94" x="3" y="3" stroke="#111111" stroke-width="4"/>
-  <rect width="86" height="86" x="7" y="7" stroke="#111111" stroke-width="1"/>
-  <!-- Bold Newspaper Letter "D" with Ink Droplet -->
-  <path d="M28 24 H52 C65 24 74 34 74 50 C74 66 65 76 52 76 H28 V24 Z M42 36 V64 H50 C58 64 62 58 62 50 C62 42 58 36 50 36 H42 Z" fill="#111111"/>
-  <circle cx="70" cy="28" r="6" fill="#CC0000"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Metallic Gold Linear Gradients -->
+    <linearGradient id="goldSheen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F2E8C4" />
+      <stop offset="30%" stop-color="#D4AF37" />
+      <stop offset="70%" stop-color="#AA820A" />
+      <stop offset="100%" stop-color="#F2E8C4" />
+    </linearGradient>
+    <linearGradient id="goldRadial" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9" />
+      <stop offset="40%" stop-color="#D4AF37" />
+      <stop offset="100%" stop-color="#805F04" />
+    </linearGradient>
+    <radialGradient id="sunburstGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#D4AF37" stop-opacity="0.35" />
+      <stop offset="60%" stop-color="#D4AF37" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#0A0A0A" stop-opacity="0" />
+    </radialGradient>
+    <filter id="goldGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Obsidian Background -->
+  <rect width="512" height="512" fill="#0A0A0A" />
+
+  <!-- Diagonal Crosshatch Subtle Texture -->
+  <g opacity="0.06" stroke="#D4AF37" stroke-width="1.5">
+    <line x1="0" y1="0" x2="512" y2="512" />
+    <line x1="128" y1="0" x2="512" y2="384" />
+    <line x1="256" y1="0" x2="512" y2="256" />
+    <line x1="384" y1="0" x2="512" y2="128" />
+    <line x1="0" y1="128" x2="384" y2="512" />
+    <line x1="0" y1="256" x2="256" y2="512" />
+    <line x1="0" y1="384" x2="128" y2="512" />
+    <line x1="512" y1="0" x2="0" y2="512" />
+    <line x1="384" y1="0" x2="0" y2="384" />
+    <line x1="256" y1="0" x2="0" y2="256" />
+    <line x1="128" y1="0" x2="0" y2="128" />
+    <line x1="512" y1="128" x2="128" y2="512" />
+    <line x1="512" y1="256" x2="256" y2="512" />
+    <line x1="512" y1="384" x2="384" y2="512" />
+  </g>
+
+  <!-- Sunburst Ambient Glow -->
+  <circle cx="256" cy="256" r="230" fill="url(#sunburstGlow)" />
+
+  <!-- Radiating Sunburst Rays -->
+  <g stroke="url(#goldSheen)" stroke-width="1" opacity="0.4">
+    <line x1="256" y1="256" x2="256" y2="20" />
+    <line x1="256" y1="256" x2="376" y2="48" />
+    <line x1="256" y1="256" x2="464" y2="136" />
+    <line x1="256" y1="256" x2="492" y2="256" />
+    <line x1="256" y1="256" x2="464" y2="376" />
+    <line x1="256" y1="256" x2="376" y2="464" />
+    <line x1="256" y1="256" x2="256" y2="492" />
+    <line x1="256" y1="256" x2="136" y2="464" />
+    <line x1="256" y1="256" x2="48" y2="376" />
+    <line x1="256" y1="256" x2="20" y2="256" />
+    <line x1="256" y1="256" x2="48" y2="136" />
+    <line x1="256" y1="256" x2="136" y2="48" />
+  </g>
+
+  <!-- Outer Stepped Art Deco Frame -->
+  <rect x="24" y="24" width="464" height="464" fill="none" stroke="url(#goldSheen)" stroke-width="2" />
+  <rect x="36" y="36" width="440" height="440" fill="none" stroke="url(#goldSheen)" stroke-width="1" opacity="0.6" />
+
+  <!-- Corner Ziggurat L-Brackets -->
+  <path d="M 24 64 L 64 64 L 64 24" fill="none" stroke="url(#goldSheen)" stroke-width="3" />
+  <path d="M 488 64 L 448 64 L 448 24" fill="none" stroke="url(#goldSheen)" stroke-width="3" />
+  <path d="M 24 448 L 64 448 L 64 488" fill="none" stroke="url(#goldSheen)" stroke-width="3" />
+  <path d="M 488 448 L 448 448 L 448 488" fill="none" stroke="url(#goldSheen)" stroke-width="3" />
+
+  <!-- Corner Diamonds -->
+  <polygon points="44,24 64,44 44,64 24,44" fill="#D4AF37" opacity="0.8" />
+  <polygon points="468,24 488,44 468,64 448,44" fill="#D4AF37" opacity="0.8" />
+  <polygon points="44,448 64,468 44,488 24,468" fill="#D4AF37" opacity="0.8" />
+  <polygon points="468,448 488,468 468,488 448,468" fill="#D4AF37" opacity="0.8" />
+
+  <!-- Central Rotated Concentric Diamonds -->
+  <polygon points="256,60 452,256 256,452 60,256" fill="#141414" stroke="url(#goldSheen)" stroke-width="3" filter="url(#goldGlow)" />
+  <polygon points="256,80 432,256 256,432 80,256" fill="none" stroke="url(#goldSheen)" stroke-width="1.5" opacity="0.7" />
+  <polygon points="256,104 408,256 256,408 104,256" fill="#0A0A0A" stroke="url(#goldSheen)" stroke-width="2" />
+
+  <!-- Inner Geometric Art Deco Wire Transmitter / Drop Icon -->
+  <!-- Top Stepped Crown -->
+  <polygon points="256,128 280,152 232,152" fill="url(#goldRadial)" />
+  <polygon points="256,146 296,176 216,176" fill="url(#goldRadial)" opacity="0.8" />
+
+  <!-- Stylized Gatsby Drop Chevron Core -->
+  <path d="M 256 160 L 340 256 L 256 352 L 172 256 Z" fill="none" stroke="url(#goldSheen)" stroke-width="4" />
+  <path d="M 256 190 L 315 256 L 256 322 L 197 256 Z" fill="none" stroke="url(#goldSheen)" stroke-width="2" opacity="0.8" />
+
+  <!-- Central Radiating Wireless Pulse Sphere -->
+  <circle cx="256" cy="256" r="14" fill="url(#goldRadial)" filter="url(#goldGlow)" />
+  
+  <!-- Transmitter Wave Arcs -->
+  <path d="M 226 230 C 210 244 210 268 226 282" fill="none" stroke="url(#goldSheen)" stroke-width="3" stroke-linecap="square" />
+  <path d="M 286 230 C 302 244 302 268 286 282" fill="none" stroke="url(#goldSheen)" stroke-width="3" stroke-linecap="square" />
+  
+  <path d="M 204 210 C 178 232 178 280 204 302" fill="none" stroke="url(#goldSheen)" stroke-width="2.5" opacity="0.75" />
+  <path d="M 308 210 C 334 232 334 280 308 302" fill="none" stroke="url(#goldSheen)" stroke-width="2.5" opacity="0.75" />
+
+  <!-- Bottom Arrow / Dispatch Marker -->
+  <polygon points="256,380 236,350 276,350" fill="url(#goldRadial)" />
 </svg>
