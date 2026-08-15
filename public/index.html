@@ -3,424 +3,253 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ATMR DROP • L'Express Wire Dispatch</title>
-  <meta name="description" content="Opulent, instantaneous cross-device wireless file and text transmission on Cloudflare. The Gatsby Aesthetic.">
+  <title>Drop • Instant Cross-Device Transfer</title>
+  <meta name="description" content="Minimalist, ultra-fast cross-device text, photo, and file transfer powered by Cloudflare Workers.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Art Deco Typography: Marcellus (Display/Headings), Italiana (Decorative), Josefin Sans (Geometric Body) -->
-  <link href="https://fonts.googleapis.com/css2?family=Italiana&family=Josefin+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Marcellus&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <!-- Clean Modern Typography: Inter & JetBrains Mono -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Ambient Diagonal Crosshatch & Sunburst Background Layer -->
-  <div class="deco-bg-texture" aria-hidden="true"></div>
-  <div class="deco-sunburst-glow" aria-hidden="true"></div>
-
-  <!-- Main Luxury Container -->
-  <div class="deco-app-wrapper">
-
-    <!-- Top Grand Architectural Masthead -->
-    <header class="deco-header" id="deco-main-header">
-      
-      <!-- Top Filigree Bar -->
-      <div class="deco-top-bar">
-        <span class="deco-edition-tag">EST. 1925 • GLOBAL METROPOLIS WIRE</span>
-        <div class="deco-bar-center">
-          <span class="deco-diamond-mini"></span>
-          <span class="deco-diamond-mini"></span>
-          <span class="deco-diamond-mini"></span>
-        </div>
-        <span class="deco-edition-tag" id="deco-edition-date">SATURDAY, AUGUST 15, 1925</span>
+  <div class="app-container">
+    
+    <!-- Minimalist Header -->
+    <header class="app-header">
+      <div class="brand">
+        <a href="/" class="brand-link">
+          <span class="brand-name">drop</span>
+          <span class="brand-dot"></span>
+        </a>
       </div>
-
-      <!-- Main Title Block with Central Symmetry -->
-      <div class="deco-title-block">
-        <div class="deco-pillar-ornament left" aria-hidden="true">
-          <div class="deco-pillar-line"></div>
-          <div class="deco-pillar-diamond">✦</div>
-        </div>
-
-        <div class="deco-masthead-center">
-          <div class="deco-kicker">CLOUDFLARE ENCRYPTED WIRE SERVICE</div>
-          <h1 class="deco-grand-title">ATMR DROP</h1>
-          <div class="deco-sub-marquee">
-            <span class="deco-line-left"></span>
-            <span class="deco-motto">L'EXPRESS WIRELESS DISPATCH</span>
-            <span class="deco-line-right"></span>
-          </div>
-        </div>
-
-        <div class="deco-pillar-ornament right" aria-hidden="true">
-          <div class="deco-pillar-diamond">✦</div>
-          <div class="deco-pillar-line"></div>
-        </div>
-      </div>
-
-      <!-- Navigation & Mode Switcher -->
-      <nav class="deco-nav-strip" aria-label="Dispatch Navigation">
-        <div class="deco-nav-group">
-          <button id="nav-mode-receive" class="deco-btn deco-btn-nav active" aria-label="Retrieve wire by PIN">
-            <span class="deco-btn-roman">I</span>
-            <span class="deco-btn-label">RETRIEVE WIRE</span>
-          </button>
-          <button id="nav-mode-send" class="deco-btn deco-btn-nav" aria-label="Dispatch new wire">
-            <span class="deco-btn-roman">II</span>
-            <span class="deco-btn-label">DISPATCH WIRE</span>
-          </button>
-        </div>
-
-        <div class="deco-system-status">
-          <span class="deco-status-indicator"></span>
-          <span class="deco-status-text">CLOUDFLARE KV ONLINE</span>
-        </div>
-      </nav>
-
-      <!-- Decorative Divider -->
-      <div class="deco-fleuron-divider" aria-hidden="true">
-        <div class="fleuron-line"></div>
-        <div class="fleuron-motif">✦ ━ ✦ ━ ✦</div>
-        <div class="fleuron-line"></div>
+      <div class="status-badge" title="Connected to Cloudflare Global Edge">
+        <span class="status-dot"></span>
+        <span class="status-label">Online</span>
       </div>
     </header>
 
-    <!-- Main Dynamic Content Desk -->
-    <main class="deco-main-stage" id="deco-content-stage">
+    <!-- Segmented Pill Control (Send / Receive) -->
+    <div class="tab-control" role="tablist">
+      <button id="tab-send" class="tab-btn active" role="tab" aria-selected="true" aria-controls="view-send">
+        <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        Send
+      </button>
+      <button id="tab-receive" class="tab-btn" role="tab" aria-selected="false" aria-controls="view-receive">
+        <svg class="tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        Receive
+      </button>
+    </div>
 
-      <!-- ================= SECTION I: RECEIVE / RETRIEVE BY PIN ================= -->
-      <section id="view-receive-input" class="deco-card stepped-card active" aria-labelledby="heading-receive">
-        <div class="card-corner-bracket top-left" aria-hidden="true"></div>
-        <div class="card-corner-bracket top-right" aria-hidden="true"></div>
-        <div class="card-corner-bracket bottom-left" aria-hidden="true"></div>
-        <div class="card-corner-bracket bottom-right" aria-hidden="true"></div>
+    <!-- Main Card Container -->
+    <main class="app-card">
 
-        <div class="card-header-bar">
-          <span class="card-roman-badge">SECTION I</span>
-          <h2 id="heading-receive" class="card-headline">ENTER WIRE TRANSMISSION PIN</h2>
-          <span class="card-header-sub">INPUT 4-DIGIT CODE FROM SENDER</span>
+      <!-- ================= VIEW 1: SEND ================= -->
+      <section id="view-send" class="view-panel active" role="tabpanel" aria-labelledby="tab-send">
+        
+        <!-- Textarea -->
+        <div class="form-group">
+          <textarea id="input-text" class="clean-textarea" placeholder="Paste text, links, code, or notes..." rows="3"></textarea>
         </div>
 
-        <div class="card-inner-body">
-          <p class="deco-lead-text">
-            Enter the four-digit code displayed on the sending device or camera to retrieve instant files, photos, and encrypted text snippets.
-          </p>
-
-          <!-- 4-Digit PIN Boxes -->
-          <div class="deco-pin-display-group">
-            <input type="text" id="pin-digit-1" class="deco-pin-cell" maxlength="1" inputmode="numeric" pattern="[0-9]*" autofocus autocomplete="off" aria-label="First digit">
-            <input type="text" id="pin-digit-2" class="deco-pin-cell" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Second digit">
-            <input type="text" id="pin-digit-3" class="deco-pin-cell" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Third digit">
-            <input type="text" id="pin-digit-4" class="deco-pin-cell" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Fourth digit">
-          </div>
-
-          <!-- Vintage Keypad -->
-          <div class="deco-keypad-grid" aria-label="Numerical Keypad">
-            <button type="button" class="deco-btn-key" data-key="1">1</button>
-            <button type="button" class="deco-btn-key" data-key="2">2</button>
-            <button type="button" class="deco-btn-key" data-key="3">3</button>
-            <button type="button" class="deco-btn-key" data-key="4">4</button>
-            <button type="button" class="deco-btn-key" data-key="5">5</button>
-            <button type="button" class="deco-btn-key" data-key="6">6</button>
-            <button type="button" class="deco-btn-key" data-key="7">7</button>
-            <button type="button" class="deco-btn-key" data-key="8">8</button>
-            <button type="button" class="deco-btn-key" data-key="9">9</button>
-            <button type="button" class="deco-btn-key deco-key-action" data-key="clear">CLR</button>
-            <button type="button" class="deco-btn-key" data-key="0">0</button>
-            <button type="button" class="deco-btn-key deco-key-action" data-key="backspace">⌫</button>
-          </div>
-
-          <div class="card-action-footer">
-            <button id="btn-fetch-drop" class="deco-btn deco-btn-solid full-width">
-              <span class="btn-text">RETRIEVE WIRE DISPATCH</span>
-              <span class="btn-arrow">⟶</span>
+        <!-- File Upload Dropzone -->
+        <div class="form-group">
+          <div id="dropzone" class="clean-dropzone" role="button" tabindex="0">
+            <input type="file" id="file-input" class="hidden-input" multiple>
+            <div class="dropzone-inner">
+              <div class="dropzone-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+              </div>
+              <div class="dropzone-text">
+                <span class="dropzone-title">Drop files here or browse</span>
+                <span class="dropzone-sub">Images, videos, documents up to 100MB</span>
+              </div>
+            </div>
+            <button type="button" id="btn-camera" class="btn-camera-snap" title="Take photo with camera">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
             </button>
           </div>
-        </div>
-      </section>
 
-      <!-- ================= SECTION II: SEND / WIRE COMPOSITION DESK ================= -->
-      <section id="view-send" class="deco-card stepped-card" aria-labelledby="heading-send">
-        <div class="card-corner-bracket top-left" aria-hidden="true"></div>
-        <div class="card-corner-bracket top-right" aria-hidden="true"></div>
-        <div class="card-corner-bracket bottom-left" aria-hidden="true"></div>
-        <div class="card-corner-bracket bottom-right" aria-hidden="true"></div>
-
-        <div class="card-header-bar">
-          <span class="card-roman-badge">SECTION II</span>
-          <h2 id="heading-send" class="card-headline">COMPOSE WIRE DISPATCH</h2>
-          <span class="card-header-sub">ATTACH DOCUMENTS, PHOTOGRAPHS &amp; MEMORANDA</span>
+          <!-- Staged files chips -->
+          <div id="staged-files-list" class="staged-chips-container hidden"></div>
         </div>
 
-        <div class="card-inner-body">
-          
-          <!-- Text Memo / Snippet Input -->
-          <div class="deco-form-group">
-            <label for="input-text" class="deco-label">
-              <span class="label-diamond">◆</span> MEMORANDUM / TEXT SNIPPET
+        <!-- Options Bar -->
+        <div class="options-bar">
+          <div class="option-item">
+            <label for="select-ttl" class="option-label">Expires</label>
+            <select id="select-ttl" class="clean-select">
+              <option value="300">5 min</option>
+              <option value="900" selected>15 min</option>
+              <option value="3600">1 hour</option>
+              <option value="86400">24 hours</option>
+            </select>
+          </div>
+          <div class="option-item">
+            <label class="clean-toggle">
+              <input type="checkbox" id="check-burn">
+              <span class="toggle-track"></span>
+              <span class="toggle-label">Burn after reading</span>
             </label>
-            <textarea id="input-text" class="deco-input-memo" rows="4" placeholder="Type or paste your message, link, code snippet, or memorandum here..."></textarea>
           </div>
-
-          <!-- Media & Documents Dropzone -->
-          <div class="deco-form-group">
-            <label class="deco-label">
-              <span class="label-diamond">◆</span> PRESS PHOTOGRAPHS &amp; FILES DEPOSIT
-            </label>
-            
-            <div id="dropzone" class="deco-dropzone-box" role="region" aria-label="File drop area">
-              <input type="file" id="file-input" class="hidden-input" multiple>
-              
-              <div class="dropzone-art-deco-icon" aria-hidden="true">
-                <div class="icon-diamond-frame">
-                  <span class="icon-inner">✦</span>
-                </div>
-              </div>
-              
-              <p class="dropzone-prompt">DEPOSIT FILES OR CLICK TO BROWSE</p>
-              <p class="dropzone-specs">Supports Images, Documents, Archives &amp; Audio (Up to 100MB Total)</p>
-
-              <div class="dropzone-camera-row">
-                <button type="button" id="btn-camera" class="deco-btn deco-btn-outline sm">
-                  <span class="btn-icon">📷</span> CAPTURE PHOTOGRAPH
-                </button>
-              </div>
-            </div>
-
-            <!-- Staged Files Manifest -->
-            <div id="staged-files-list" class="deco-staged-manifest hidden">
-              <div class="manifest-header">STAGED ENCLOSURES (<span id="file-count-badge">0</span>)</div>
-              <ul id="staged-files-items" class="manifest-ul"></ul>
-            </div>
-          </div>
-
-          <!-- Configuration: Expiration & Burn Toggle -->
-          <div class="deco-config-grid">
-            <div class="deco-config-column">
-              <label for="select-ttl" class="deco-label">
-                <span class="label-diamond">◆</span> TRANSMISSION RETENTION
-              </label>
-              <div class="deco-select-wrapper">
-                <select id="select-ttl" class="deco-select">
-                  <option value="300">V minutes (5 Minutes Quick)</option>
-                  <option value="900" selected>XV minutes (15 Minutes Standard)</option>
-                  <option value="3600">I hour (1 Hour Extended)</option>
-                  <option value="86400">XXIV hours (24 Hours Archive)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="deco-config-column">
-              <label class="deco-label">
-                <span class="label-diamond">◆</span> SECURITY PROTOCOL
-              </label>
-              <label class="deco-checkbox-label">
-                <input type="checkbox" id="check-burn" class="deco-checkbox">
-                <span class="checkbox-custom"></span>
-                <span class="checkbox-text">BURN AFTER RETRIEVAL (AUTODESTRUCT)</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Transmit Action Button -->
-          <div class="card-action-footer">
-            <button id="btn-send-drop" class="deco-btn deco-btn-solid full-width">
-              <span class="btn-text">TRANSMIT WIRE DISPATCH</span>
-              <span class="btn-arrow">⟶</span>
-            </button>
-          </div>
-
         </div>
+
+        <!-- Primary Action -->
+        <div class="action-footer">
+          <button id="btn-send-drop" class="btn-primary full-width">
+            <span class="btn-text">Create Drop</span>
+          </button>
+        </div>
+
       </section>
 
-      <!-- ================= SECTION III: SHARE RECEIPT (PIN & QR) ================= -->
-      <section id="view-share" class="deco-card stepped-card" aria-labelledby="heading-share">
-        <div class="card-corner-bracket top-left" aria-hidden="true"></div>
-        <div class="card-corner-bracket top-right" aria-hidden="true"></div>
-        <div class="card-corner-bracket bottom-left" aria-hidden="true"></div>
-        <div class="card-corner-bracket bottom-right" aria-hidden="true"></div>
-
-        <div class="card-header-bar">
-          <span class="card-roman-badge">SECTION III</span>
-          <h2 id="heading-share" class="card-headline">DISPATCH RECEIPT ISSUED</h2>
-          <span class="card-header-sub">ACTIVE IN SECURE KV VAULT</span>
+      <!-- ================= VIEW 2: RECEIVE (PIN INPUT) ================= -->
+      <section id="view-receive" class="view-panel" role="tabpanel" aria-labelledby="tab-receive">
+        
+        <div class="receive-intro">
+          <h2 class="section-title">Enter 4-Digit PIN</h2>
+          <p class="section-desc">Type the code displayed on the sender's screen</p>
         </div>
 
-        <div class="card-inner-body text-center">
-          
-          <div class="receipt-ribbon">
-            <span class="ribbon-text">TRANSMISSION ACTIVE &amp; PENDING RECEIVER</span>
-          </div>
-
-          <!-- Big 4-Digit PIN Exhibition -->
-          <div class="deco-pin-frame">
-            <div class="pin-frame-label">OFFICIAL 4-DIGIT ROOM PIN</div>
-            <div id="share-pin-code" class="deco-big-pin">----</div>
-            <div class="pin-frame-sub">TYPE THIS PIN ON ANY MACHINE OR PHONE</div>
-          </div>
-
-          <!-- Dual Column: QR Code & Direct Link -->
-          <div class="receipt-details-grid">
-            <div class="receipt-qr-column">
-              <div class="deco-qr-wrapper">
-                <div id="share-qrcode-canvas" class="deco-qr-box"></div>
-              </div>
-              <p class="qr-caption">SCAN WITH CAMERA FOR INSTANT LOAD</p>
-            </div>
-
-            <div class="receipt-info-column">
-              <div class="info-block">
-                <div class="info-label">DISPATCH DIRECT URL</div>
-                <div class="deco-input-copy-group">
-                  <input type="text" id="share-direct-url" class="deco-input-url" readonly>
-                  <button id="btn-copy-url" class="deco-btn deco-btn-outline sm">COPY</button>
-                </div>
-              </div>
-
-              <div class="info-block">
-                <div class="info-label">TIME REMAINING</div>
-                <div id="share-time-left" class="info-val-gold">14:59</div>
-              </div>
-
-              <div id="share-burn-badge" class="burn-indicator hidden">
-                🔥 WILL BE PERMANENTLY DESTROYED UPON FIRST RETRIEVAL
-              </div>
-            </div>
-          </div>
-
-          <div class="card-action-footer split-footer">
-            <button id="btn-cancel-drop" class="deco-btn deco-btn-outline">
-              DISCARD / PURGE DISPATCH
-            </button>
-            <button id="btn-new-send" class="deco-btn deco-btn-solid">
-              COMPOSE ANOTHER WIRE
-            </button>
-          </div>
-
+        <!-- 4-Box PIN Input -->
+        <div class="pin-input-group">
+          <input type="text" id="pin-digit-1" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autofocus>
+          <input type="text" id="pin-digit-2" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+          <input type="text" id="pin-digit-3" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+          <input type="text" id="pin-digit-4" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
         </div>
+
+        <div class="action-footer">
+          <button id="btn-fetch-drop" class="btn-primary full-width">
+            Retrieve Drop
+          </button>
+        </div>
+
       </section>
 
-      <!-- ================= SECTION IV: DECRYPTED VAULT (RECEIVE RESULTS) ================= -->
-      <section id="view-receive-content" class="deco-card stepped-card" aria-labelledby="heading-decrypted">
-        <div class="card-corner-bracket top-left" aria-hidden="true"></div>
-        <div class="card-corner-bracket top-right" aria-hidden="true"></div>
-        <div class="card-corner-bracket bottom-left" aria-hidden="true"></div>
-        <div class="card-corner-bracket bottom-right" aria-hidden="true"></div>
-
-        <div class="card-header-bar">
-          <span class="card-roman-badge">SECTION IV</span>
-          <h2 id="heading-decrypted" class="card-headline">INCOMING WIRE DECRYPTED</h2>
-          <span class="card-header-sub">VERIFIED TRANSMISSION RETRIEVED</span>
+      <!-- ================= VIEW 3: SHARE (ACTIVE PIN & QR) ================= -->
+      <section id="view-share" class="view-panel">
+        
+        <div class="share-header">
+          <div class="pulse-indicator">
+            <span class="pulse-dot"></span>
+            <span class="pulse-text">Ready to receive</span>
+          </div>
+          <span id="share-time-left" class="time-badge">14:59</span>
         </div>
 
-        <div class="card-inner-body">
-          
-          <div class="deco-status-ribbon">
-            <span class="status-chip verified">✔ WIRE VERIFIED</span>
-            <span id="receive-expiry-text" class="status-chip expiry">EXPIRING IN: --:--</span>
-            <span id="receive-burn-notice" class="status-chip burn hidden">🔥 DESTROYED ON SENDER VAULT</span>
-          </div>
-
-          <!-- Received Text Section -->
-          <div id="received-text-container" class="received-block hidden">
-            <div class="block-header">
-              <span class="block-title">DECRYPTED MEMORANDUM</span>
-              <button id="btn-copy-received-text" class="deco-btn deco-btn-outline xs">COPY TEXT</button>
-            </div>
-            <div id="received-text-content" class="received-text-box"></div>
-          </div>
-
-          <!-- Received Images Gallery -->
-          <div id="received-images-container" class="received-block hidden">
-            <div class="block-header">
-              <span class="block-title">PRESS PHOTOGRAPHS (<span id="images-count">0</span>)</span>
-            </div>
-            <div id="received-images-grid" class="received-images-grid"></div>
-          </div>
-
-          <!-- Received Files List -->
-          <div id="received-files-container" class="received-block hidden">
-            <div class="block-header">
-              <span class="block-title">ATTACHED ENCLOSURES (<span id="files-count">0</span>)</span>
-              <button id="btn-download-all-zip" class="deco-btn deco-btn-outline xs">DOWNLOAD ALL (ZIP)</button>
-            </div>
-            <div id="received-files-list" class="received-files-table"></div>
-          </div>
-
-          <div class="card-action-footer">
-            <button id="btn-receive-another" class="deco-btn deco-btn-solid full-width">
-              RECEIVE ANOTHER WIRE DISPATCH
-            </button>
-          </div>
-
+        <!-- PIN Code Display -->
+        <div class="pin-hero-card" id="btn-copy-pin" title="Click to copy PIN">
+          <span class="pin-label">Room PIN</span>
+          <div id="share-pin-code" class="pin-hero-digits">----</div>
+          <span class="pin-hint">Click to copy</span>
         </div>
+
+        <!-- QR Code & Link -->
+        <div class="share-qr-wrapper">
+          <div id="share-qrcode-canvas" class="clean-qr-box"></div>
+          <p class="qr-hint">Scan with camera on phone or tablet</p>
+        </div>
+
+        <div class="copy-url-group">
+          <input type="text" id="share-direct-url" class="clean-input readonly" readonly>
+          <button id="btn-copy-url" class="btn-secondary">Copy Link</button>
+        </div>
+
+        <div id="share-burn-badge" class="burn-alert hidden">
+          🔥 Burn-after-reading enabled: will self-destruct once downloaded.
+        </div>
+
+        <div class="share-actions-row">
+          <button id="btn-cancel-drop" class="btn-ghost text-danger">Delete</button>
+          <button id="btn-new-send" class="btn-secondary">New Drop</button>
+        </div>
+
+      </section>
+
+      <!-- ================= VIEW 4: VAULT (DECRYPTED RESULTS) ================= -->
+      <section id="view-vault" class="view-panel">
+        
+        <div class="vault-header">
+          <div class="vault-status">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            <span>Decrypted Drop</span>
+          </div>
+          <span id="receive-expiry-text" class="time-badge">14:59</span>
+        </div>
+
+        <div id="receive-burn-notice" class="burn-alert hidden">
+          🔥 This drop has self-destructed on the server.
+        </div>
+
+        <!-- Decrypted Text -->
+        <div id="received-text-container" class="vault-block hidden">
+          <div class="block-top">
+            <span class="block-label">Text Note</span>
+            <button id="btn-copy-received-text" class="btn-ghost sm">Copy</button>
+          </div>
+          <div id="received-text-content" class="text-preview-box"></div>
+        </div>
+
+        <!-- Received Images -->
+        <div id="received-images-container" class="vault-block hidden">
+          <div class="block-top">
+            <span class="block-label">Photos (<span id="images-count">0</span>)</span>
+          </div>
+          <div id="received-images-grid" class="image-gallery-grid"></div>
+        </div>
+
+        <!-- Received Files -->
+        <div id="received-files-container" class="vault-block hidden">
+          <div class="block-top">
+            <span class="block-label">Files (<span id="files-count">0</span>)</span>
+            <button id="btn-download-all-zip" class="btn-secondary sm">Download All (.zip)</button>
+          </div>
+          <div id="received-files-list" class="file-rows-list"></div>
+        </div>
+
+        <div class="action-footer">
+          <button id="btn-receive-another" class="btn-secondary full-width">
+            Done
+          </button>
+        </div>
+
       </section>
 
     </main>
 
-    <!-- Grand Art Deco Colophon & Footer -->
-    <footer class="deco-footer" id="deco-main-footer">
-      <div class="deco-fleuron-divider" aria-hidden="true">
-        <div class="fleuron-line"></div>
-        <div class="fleuron-motif">✦ ━ ✦ ━ ✦</div>
-        <div class="fleuron-line"></div>
-      </div>
-
-      <div class="deco-footer-grid">
-        <div class="footer-col">
-          <div class="footer-heading">ARCHITECTURE</div>
-          <p class="footer-copy">Cloudflare Edge Worker • Global Distributed KV Storage • Web Crypto API</p>
-        </div>
-
-        <div class="footer-col center-col">
-          <div class="footer-monogram">
-            <span class="monogram-diamond">◆</span>
-            <span class="monogram-text">ATMR DROP</span>
-            <span class="monogram-diamond">◆</span>
-          </div>
-          <p class="footer-tagline">"The Roaring Twenties Wireless Dispatch"</p>
-        </div>
-
-        <div class="footer-col right-col">
-          <div class="footer-heading">ORIGIN &amp; RIGHTS</div>
-          <p class="footer-copy">Designed &amp; Engineered by <strong>atmr</strong> • All Rights Reserved</p>
-        </div>
-      </div>
+    <!-- Minimalist Footer -->
+    <footer class="app-footer">
+      <span>drop.atmr.workers.dev</span>
+      <span class="footer-dot">•</span>
+      <span>Encrypted P2P &amp; Edge Storage</span>
     </footer>
 
   </div>
 
-  <!-- Webcam Capture Modal -->
-  <div id="camera-modal" class="deco-modal" aria-hidden="true" role="dialog">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content stepped-card">
-      <div class="card-corner-bracket top-left"></div>
-      <div class="card-corner-bracket top-right"></div>
-      <div class="card-corner-bracket bottom-left"></div>
-      <div class="card-corner-bracket bottom-right"></div>
-
+  <!-- Camera Modal -->
+  <div id="camera-modal" class="clean-modal" aria-hidden="true">
+    <div class="modal-overlay"></div>
+    <div class="modal-card">
       <div class="modal-header">
-        <h3 class="modal-title">PRESS PHOTOGRAPH CAPTURE</h3>
-        <button id="btn-camera-close" class="modal-close-btn">&times;</button>
+        <h3 class="modal-heading">Take Photo</h3>
+        <button id="btn-camera-close" class="btn-modal-close">&times;</button>
       </div>
-
       <div class="modal-body">
-        <div class="camera-stream-wrapper">
-          <video id="camera-video" autoplay playsinline></video>
-          <canvas id="camera-canvas" class="hidden"></canvas>
-        </div>
+        <video id="camera-video" autoplay playsinline></video>
+        <canvas id="camera-canvas" class="hidden"></canvas>
       </div>
-
       <div class="modal-footer">
-        <button id="btn-camera-snap" class="deco-btn deco-btn-solid">SNAP PHOTOGRAPH</button>
+        <button id="btn-camera-snap" class="btn-primary full-width">Capture</button>
       </div>
     </div>
   </div>
 
-  <!-- Toast Alert Notifications -->
-  <div id="toast-container" class="deco-toast-shelf" aria-live="polite"></div>
+  <!-- Toast notifications -->
+  <div id="toast-container" class="toast-shelf"></div>
 
-  <!-- Vendor Scripts for QR and ZIP -->
+  <!-- Vendor Scripts -->
   <script src="vendor/qrcode.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="app.js"></script>

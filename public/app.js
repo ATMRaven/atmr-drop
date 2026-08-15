@@ -1,6 +1,6 @@
 /**
- * ATMR DROP • ART DECO / GATSBY CLIENT LOGIC
- * Seamless cross-device encrypted file, photo and text sharing.
+ * DROP • MINIMALIST CLIENT LOGIC
+ * Ultra-clean, fast, cross-device file & text sharing.
  */
 
 (function () {
@@ -10,17 +10,15 @@
   let stagedFiles = [];
   let activeDropData = null;
   let countdownTimer = null;
-  let audioCtx = null;
 
   // --- DOM ELEMENTS ---
-  const headerDateEl = document.getElementById('deco-edition-date');
-  const navReceiveBtn = document.getElementById('nav-mode-receive');
-  const navSendBtn = document.getElementById('nav-mode-send');
+  const tabSend = document.getElementById('tab-send');
+  const tabReceive = document.getElementById('tab-receive');
 
-  const viewReceiveInput = document.getElementById('view-receive-input');
   const viewSend = document.getElementById('view-send');
+  const viewReceive = document.getElementById('view-receive');
   const viewShare = document.getElementById('view-share');
-  const viewReceiveContent = document.getElementById('view-receive-content');
+  const viewVault = document.getElementById('view-vault');
 
   // PIN inputs
   const pinCells = [
@@ -31,19 +29,18 @@
   ];
   const btnFetchDrop = document.getElementById('btn-fetch-drop');
 
-  // Send view elements
+  // Send elements
   const inputText = document.getElementById('input-text');
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('file-input');
-  const stagedManifest = document.getElementById('staged-files-list');
-  const stagedItemsUl = document.getElementById('staged-files-items');
-  const fileCountBadge = document.getElementById('file-count-badge');
+  const stagedChipsList = document.getElementById('staged-files-list');
   const selectTtl = document.getElementById('select-ttl');
   const checkBurn = document.getElementById('check-burn');
   const btnSendDrop = document.getElementById('btn-send-drop');
   const btnCamera = document.getElementById('btn-camera');
 
-  // Share view elements
+  // Share elements
+  const btnCopyPin = document.getElementById('btn-copy-pin');
   const sharePinCode = document.getElementById('share-pin-code');
   const shareQrCanvas = document.getElementById('share-qrcode-canvas');
   const shareDirectUrl = document.getElementById('share-direct-url');
@@ -53,7 +50,7 @@
   const btnCancelDrop = document.getElementById('btn-cancel-drop');
   const btnNewSend = document.getElementById('btn-new-send');
 
-  // Receive view elements
+  // Vault / Receive elements
   const receiveExpiryText = document.getElementById('receive-expiry-text');
   const receiveBurnNotice = document.getElementById('receive-burn-notice');
   const receivedTextContainer = document.getElementById('received-text-container');
@@ -68,7 +65,7 @@
   const btnDownloadAllZip = document.getElementById('btn-download-all-zip');
   const btnReceiveAnother = document.getElementById('btn-receive-another');
 
-  // Modal Camera
+  // Camera modal
   const cameraModal = document.getElementById('camera-modal');
   const cameraVideo = document.getElementById('camera-video');
   const cameraCanvas = document.getElementById('camera-canvas');
@@ -76,109 +73,43 @@
   const btnCameraClose = document.getElementById('btn-camera-close');
   let mediaStream = null;
 
-  // --- INIT ---
+  // --- INITIALIZATION ---
   function init() {
-    initDynamicDate();
-    setupNavigation();
+    setupTabs();
     setupPinInputs();
-    setupKeypad();
     setupDropzone();
     setupCamera();
     setupActions();
     checkDirectPinRoute();
   }
 
-  function initDynamicDate() {
-    if (!headerDateEl) return;
-    const now = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const dateStr = now.toLocaleDateString('en-US', options).toUpperCase();
-    headerDateEl.textContent = `${dateStr} • LUXURY METROPOLIS EDITION`;
-  }
+  // --- TAB NAVIGATION ---
+  function switchTab(mode) {
+    [viewSend, viewReceive, viewShare, viewVault].forEach(v => v.classList.remove('active'));
 
-  // --- AUDIO SYNTHESIS (METALLIC CHIME & CLICK) ---
-  function playSound(type) {
-    try {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-
-      const now = audioCtx.currentTime;
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-
-      if (type === 'click') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.exponentialRampToValueAtTime(110, now + 0.05);
-        gain.gain.setValueAtTime(0.12, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-        osc.start(now);
-        osc.stop(now + 0.05);
-      } else if (type === 'success') {
-        // Metallic Gold Chime (Arpeggio)
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(523.25, now); // C5
-        osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
-        osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
-        osc.frequency.setValueAtTime(1046.50, now + 0.24); // C6
-        gain.gain.setValueAtTime(0.15, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-        osc.start(now);
-        osc.stop(now + 0.6);
-      } else if (type === 'retrieve') {
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(330, now);
-        osc.frequency.exponentialRampToValueAtTime(880, now + 0.2);
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-        osc.start(now);
-        osc.stop(now + 0.25);
-      }
-    } catch (e) {
-      // Ignore audio failure
-    }
-  }
-
-  // --- NAVIGATION ---
-  function showView(viewId) {
-    [viewReceiveInput, viewSend, viewShare, viewReceiveContent].forEach(v => {
-      if (v) v.classList.remove('active');
-    });
-
-    if (viewId === 'receive') {
-      viewReceiveInput.classList.add('active');
-      navReceiveBtn.classList.add('active');
-      navSendBtn.classList.remove('active');
-      pinCells[0].focus();
-    } else if (viewId === 'send') {
+    if (mode === 'send') {
+      tabSend.classList.add('active');
+      tabReceive.classList.remove('active');
       viewSend.classList.add('active');
-      navSendBtn.classList.add('active');
-      navReceiveBtn.classList.remove('active');
-    } else if (viewId === 'share') {
+      inputText.focus();
+    } else if (mode === 'receive') {
+      tabReceive.classList.add('active');
+      tabSend.classList.remove('active');
+      viewReceive.classList.add('active');
+      pinCells[0].focus();
+    } else if (mode === 'share') {
       viewShare.classList.add('active');
-    } else if (viewId === 'content') {
-      viewReceiveContent.classList.add('active');
+    } else if (mode === 'vault') {
+      viewVault.classList.add('active');
     }
   }
 
-  function setupNavigation() {
-    navReceiveBtn.addEventListener('click', () => {
-      playSound('click');
-      showView('receive');
-    });
-    navSendBtn.addEventListener('click', () => {
-      playSound('click');
-      showView('send');
-    });
+  function setupTabs() {
+    tabSend.addEventListener('click', () => switchTab('send'));
+    tabReceive.addEventListener('click', () => switchTab('receive'));
   }
 
-  // --- PIN INPUT HANDLING ---
+  // --- PIN INPUTS ---
   function setupPinInputs() {
     pinCells.forEach((cell, idx) => {
       cell.addEventListener('input', (e) => {
@@ -226,47 +157,10 @@
     btnFetchDrop.addEventListener('click', () => {
       const pin = getEnteredPin();
       if (pin.length !== 4) {
-        showToast('Please enter complete 4-digit PIN code');
+        showToast('Please enter full 4-digit PIN');
         return;
       }
       fetchDropByPin(pin);
-    });
-  }
-
-  function setupKeypad() {
-    document.querySelectorAll('.deco-btn-key').forEach(btn => {
-      btn.addEventListener('click', () => {
-        playSound('click');
-        const key = btn.dataset.key;
-        if (key === 'clear') {
-          pinCells.forEach(c => c.value = '');
-          pinCells[0].focus();
-        } else if (key === 'backspace') {
-          for (let i = pinCells.length - 1; i >= 0; i--) {
-            if (pinCells[i].value) {
-              pinCells[i].value = '';
-              pinCells[i].focus();
-              break;
-            }
-          }
-        } else {
-          // Number key
-          for (let i = 0; i < pinCells.length; i++) {
-            if (!pinCells[i].value) {
-              pinCells[i].value = key;
-              if (i < pinCells.length - 1) {
-                pinCells[i + 1].focus();
-              } else {
-                const fullPin = getEnteredPin();
-                if (fullPin.length === 4) {
-                  fetchDropByPin(fullPin);
-                }
-              }
-              break;
-            }
-          }
-        }
-      });
     });
   }
 
@@ -274,7 +168,7 @@
     return pinCells.map(c => c.value).join('');
   }
 
-  // --- DROPZONE & FILE HANDLING ---
+  // --- DROPZONE & FILES ---
   function setupDropzone() {
     dropzone.addEventListener('click', (e) => {
       if (e.target !== btnCamera && !btnCamera.contains(e.target)) {
@@ -286,16 +180,16 @@
       handleFiles(fileInput.files);
     });
 
-    ['dragenter', 'dragover'].forEach(eventName => {
-      dropzone.addEventListener(eventName, (e) => {
+    ['dragenter', 'dragover'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
         e.preventDefault();
         e.stopPropagation();
         dropzone.classList.add('dragover');
       });
     });
 
-    ['dragleave', 'drop'].forEach(eventName => {
-      dropzone.addEventListener(eventName, (e) => {
+    ['dragleave', 'drop'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
         e.preventDefault();
         e.stopPropagation();
         dropzone.classList.remove('dragover');
@@ -336,29 +230,26 @@
   }
 
   function renderStagedFiles() {
-    stagedItemsUl.innerHTML = '';
+    stagedChipsList.innerHTML = '';
     if (stagedFiles.length === 0) {
-      stagedManifest.classList.add('hidden');
+      stagedChipsList.classList.add('hidden');
       return;
     }
 
-    stagedManifest.classList.remove('hidden');
-    fileCountBadge.textContent = stagedFiles.length;
+    stagedChipsList.classList.remove('hidden');
 
     stagedFiles.forEach((file, idx) => {
-      const li = document.createElement('li');
-      li.className = 'manifest-item';
-      li.innerHTML = `
-        <span class="manifest-item-name">${escapeHtml(file.name)}</span>
-        <div>
-          <span class="manifest-item-size">${formatFileSize(file.size)}</span>
-          <button type="button" class="manifest-item-remove" data-idx="${idx}" title="Remove file">&times;</button>
-        </div>
+      const chip = document.createElement('div');
+      chip.className = 'file-chip';
+      chip.innerHTML = `
+        <span class="chip-name">${escapeHtml(file.name)}</span>
+        <span class="chip-size">${formatFileSize(file.size)}</span>
+        <button type="button" class="chip-remove" data-idx="${idx}">&times;</button>
       `;
-      stagedItemsUl.appendChild(li);
+      stagedChipsList.appendChild(chip);
     });
 
-    document.querySelectorAll('.manifest-item-remove').forEach(btn => {
+    document.querySelectorAll('.chip-remove').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const idx = parseInt(e.target.dataset.idx, 10);
         stagedFiles.splice(idx, 1);
@@ -367,7 +258,7 @@
     });
   }
 
-  // --- CAMERA CAPTURE ---
+  // --- CAMERA ---
   function setupCamera() {
     btnCamera.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -376,7 +267,7 @@
         cameraVideo.srcObject = mediaStream;
         cameraModal.classList.add('active');
       } catch (err) {
-        showToast('Camera access denied or unavailable');
+        showToast('Camera unavailable');
       }
     });
 
@@ -390,7 +281,7 @@
       ctx.drawImage(cameraVideo, 0, 0);
 
       const base64 = cameraCanvas.toDataURL('image/jpeg', 0.85);
-      const filename = `snapshot_${new Date().toISOString().replace(/[:.]/g, '-')}.jpg`;
+      const filename = `photo_${Date.now()}.jpg`;
 
       stagedFiles.push({
         id: 'f_' + Math.random().toString(36).substring(2, 9),
@@ -402,8 +293,7 @@
 
       renderStagedFiles();
       closeCamera();
-      showToast('Photograph captured and staged');
-      playSound('success');
+      showToast('Photo captured');
     });
   }
 
@@ -415,17 +305,17 @@
     cameraModal.classList.remove('active');
   }
 
-  // --- TRANSMIT DROP ACTION ---
+  // --- SEND & SHARE ACTIONS ---
   function setupActions() {
     btnSendDrop.addEventListener('click', async () => {
       const text = inputText.value.trim();
       if (!text && stagedFiles.length === 0) {
-        showToast('Please enter text or attach at least one file');
+        showToast('Please enter text or attach a file');
         return;
       }
 
       btnSendDrop.disabled = true;
-      btnSendDrop.querySelector('.btn-text').textContent = 'ENCRYPTING & DISPATCHING...';
+      btnSendDrop.querySelector('.btn-text').textContent = 'Creating Drop...';
 
       try {
         const payload = {
@@ -442,121 +332,109 @@
         });
 
         const data = await res.json();
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to dispatch drop');
-        }
+        if (!data.success) throw new Error(data.error || 'Failed to create drop');
 
         activeDropData = data;
-        displayShareReceipt(data);
-        playSound('success');
-        showToast('Wire Dispatch Broadcasted Successfully!');
+        displayShareScreen(data);
+        showToast('Drop created!');
       } catch (err) {
-        showToast(err.message || 'Transmission failed');
+        showToast(err.message || 'Failed to send drop');
       } finally {
         btnSendDrop.disabled = false;
-        btnSendDrop.querySelector('.btn-text').textContent = 'TRANSMIT WIRE DISPATCH';
+        btnSendDrop.querySelector('.btn-text').textContent = 'Create Drop';
+      }
+    });
+
+    btnCopyPin.addEventListener('click', () => {
+      if (activeDropData && activeDropData.code) {
+        navigator.clipboard.writeText(activeDropData.code);
+        showToast(`PIN ${activeDropData.code} copied!`);
       }
     });
 
     btnCopyUrl.addEventListener('click', () => {
-      if (!shareDirectUrl.value) return;
-      navigator.clipboard.writeText(shareDirectUrl.value);
-      playSound('click');
-      showToast('Direct dispatch URL copied to clipboard');
+      if (shareDirectUrl.value) {
+        navigator.clipboard.writeText(shareDirectUrl.value);
+        showToast('Link copied to clipboard');
+      }
     });
 
     btnCancelDrop.addEventListener('click', async () => {
-      if (!activeDropData || !activeDropData.code) return;
-      try {
-        await fetch(`/api/drop/${activeDropData.code}`, { method: 'DELETE' });
-        showToast('Dispatch purged from vault');
-      } catch (e) {
-        // Ignore
+      if (activeDropData && activeDropData.code) {
+        try {
+          await fetch(`/api/drop/${activeDropData.code}`, { method: 'DELETE' });
+          showToast('Drop deleted');
+        } catch (e) {}
       }
-      resetSendForm();
-      showView('send');
+      resetForm();
+      switchTab('send');
     });
 
     btnNewSend.addEventListener('click', () => {
-      resetSendForm();
-      showView('send');
+      resetForm();
+      switchTab('send');
     });
 
     btnCopyReceivedText.addEventListener('click', () => {
-      const text = receivedTextContent.textContent;
-      if (text) {
-        navigator.clipboard.writeText(text);
-        playSound('click');
-        showToast('Memorandum copied to clipboard');
+      const txt = receivedTextContent.textContent;
+      if (txt) {
+        navigator.clipboard.writeText(txt);
+        showToast('Text copied');
       }
     });
 
-    btnDownloadAllZip.addEventListener('click', downloadAllFilesAsZip);
+    btnDownloadAllZip.addEventListener('click', downloadZip);
 
     btnReceiveAnother.addEventListener('click', () => {
       pinCells.forEach(c => c.value = '');
-      showView('receive');
+      switchTab('receive');
     });
   }
 
-  function displayShareReceipt(data) {
+  function displayShareScreen(data) {
     sharePinCode.textContent = data.code;
     const directUrl = `${window.location.origin}/${data.code}`;
     shareDirectUrl.value = directUrl;
 
-    // Render Optical QR Matrix
-    renderQrCode(directUrl);
+    renderQr(directUrl);
 
-    // Burn badge
     if (data.burnAfterRead) {
       shareBurnBadge.classList.remove('hidden');
     } else {
       shareBurnBadge.classList.add('hidden');
     }
 
-    // Start Countdown
     startExpiryCountdown(data.expiresAt, shareTimeLeft);
-
-    showView('share');
+    switchTab('share');
   }
 
-  function renderQrCode(url) {
+  function renderQr(url) {
     shareQrCanvas.innerHTML = '';
     try {
-      if (typeof QRCode !== 'undefined') {
-        new QRCode(shareQrCanvas, {
-          text: url,
-          width: 170,
-          height: 170,
-          colorDark: '#0A0A0A',
-          colorLight: '#FFFFFF',
-          correctLevel: QRCode.CorrectLevel.M
-        });
-      } else {
-        shareQrCanvas.innerHTML = `<div style="padding: 20px; font-size: 0.8rem; color: #000;">${url}</div>`;
+      if (typeof qrcode !== 'undefined') {
+        const qr = qrcode(0, 'M');
+        qr.addData(url);
+        qr.make();
+        shareQrCanvas.innerHTML = qr.createImgTag(4, 6);
       }
     } catch (e) {
-      shareQrCanvas.innerHTML = `<div style="padding: 20px; font-size: 0.8rem; color: #000;">${url}</div>`;
+      shareQrCanvas.innerHTML = `<div style="padding:10px;font-size:12px;">${url}</div>`;
     }
   }
 
-  // --- RETRIEVE DROP BY PIN ---
+  // --- RETRIEVE DROP ---
   async function fetchDropByPin(code) {
-    playSound('retrieve');
     btnFetchDrop.disabled = true;
-    showToast(`Decrypting Wire PIN: ${code}...`);
+    showToast(`Loading PIN ${code}...`);
 
     try {
       const res = await fetch(`/api/drop/${code}`);
       const data = await res.json();
 
-      if (!data.success) {
-        throw new Error(data.error || 'Invalid or expired wire code');
-      }
+      if (!data.success) throw new Error(data.error || 'Drop not found or expired');
 
-      displayDecryptedDrop(data.drop);
-      playSound('success');
-      showToast('Wire Decrypted & Verified!');
+      displayVaultScreen(data.drop);
+      showToast('Drop retrieved!');
     } catch (err) {
       showToast(err.message || 'Retrieval failed');
       pinCells.forEach(c => c.value = '');
@@ -566,18 +444,17 @@
     }
   }
 
-  function displayDecryptedDrop(drop) {
+  function displayVaultScreen(drop) {
     activeDropData = drop;
 
-    // Expiry and Burn status
-    startExpiryCountdown(drop.expiresAt, receiveExpiryText, 'EXPIRING IN: ');
+    startExpiryCountdown(drop.expiresAt, receiveExpiryText);
     if (drop.burnAfterRead) {
       receiveBurnNotice.classList.remove('hidden');
     } else {
       receiveBurnNotice.classList.add('hidden');
     }
 
-    // Decrypted Text
+    // Text
     if (drop.text) {
       receivedTextContainer.classList.remove('hidden');
       receivedTextContent.textContent = drop.text;
@@ -585,34 +462,33 @@
       receivedTextContainer.classList.add('hidden');
     }
 
-    // Separate Images & Files
     const files = drop.files || [];
     const images = files.filter(f => f.type && f.type.startsWith('image/'));
     const nonImages = files.filter(f => !f.type || !f.type.startsWith('image/'));
 
-    // Render Images
+    // Images
     if (images.length > 0) {
       receivedImagesContainer.classList.remove('hidden');
       imagesCount.textContent = images.length;
       receivedImagesGrid.innerHTML = '';
 
       images.forEach(img => {
-        const card = document.createElement('div');
-        card.className = 'received-image-card';
-        card.innerHTML = `
-          <img src="${img.dataBase64}" class="received-img-preview" alt="${escapeHtml(img.name)}">
-          <div class="received-img-footer">
-            <span class="received-img-name">${escapeHtml(img.name)}</span>
-            <a href="${img.dataBase64}" download="${escapeHtml(img.name)}" class="deco-btn deco-btn-outline xs">SAVE</a>
+        const item = document.createElement('div');
+        item.className = 'gallery-item';
+        item.innerHTML = `
+          <img src="${img.dataBase64}" class="gallery-img" alt="${escapeHtml(img.name)}">
+          <div class="gallery-item-footer">
+            <span class="gallery-item-name">${escapeHtml(img.name)}</span>
+            <a href="${img.dataBase64}" download="${escapeHtml(img.name)}" class="btn-ghost sm">Save</a>
           </div>
         `;
-        receivedImagesGrid.appendChild(card);
+        receivedImagesGrid.appendChild(item);
       });
     } else {
       receivedImagesContainer.classList.add('hidden');
     }
 
-    // Render Files
+    // Files
     if (nonImages.length > 0) {
       receivedFilesContainer.classList.remove('hidden');
       filesCount.textContent = nonImages.length;
@@ -620,13 +496,13 @@
 
       nonImages.forEach(file => {
         const row = document.createElement('div');
-        row.className = 'received-file-row';
+        row.className = 'file-row';
         row.innerHTML = `
-          <div class="received-file-info">
-            <span class="received-file-name">${escapeHtml(file.name)}</span>
-            <span class="received-file-meta">${formatFileSize(file.size)} • ${file.type || 'Document'}</span>
+          <div class="file-row-info">
+            <span class="file-row-name">${escapeHtml(file.name)}</span>
+            <span class="file-row-meta">${formatFileSize(file.size)}</span>
           </div>
-          <a href="${file.dataBase64}" download="${escapeHtml(file.name)}" class="deco-btn deco-btn-outline xs">DOWNLOAD</a>
+          <a href="${file.dataBase64}" download="${escapeHtml(file.name)}" class="btn-secondary sm">Download</a>
         `;
         receivedFilesList.appendChild(row);
       });
@@ -634,18 +510,18 @@
       receivedFilesContainer.classList.add('hidden');
     }
 
-    showView('content');
+    switchTab('vault');
   }
 
-  // --- ZIP ARCHIVE CREATION ---
-  async function downloadAllFilesAsZip() {
+  // --- ZIP ARCHIVER ---
+  async function downloadZip() {
     if (!activeDropData || !activeDropData.files || !activeDropData.files.length) return;
     if (typeof JSZip === 'undefined') {
-      showToast('Archiver library unavailable');
+      showToast('Archiver unavailable');
       return;
     }
 
-    btnDownloadAllZip.textContent = 'ARCHIVING...';
+    btnDownloadAllZip.textContent = 'Zipping...';
     btnDownloadAllZip.disabled = true;
 
     try {
@@ -656,31 +532,29 @@
       }
 
       if (activeDropData.text) {
-        zip.file('memorandum.txt', activeDropData.text);
+        zip.file('note.txt', activeDropData.text);
       }
 
       const content = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(content);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `wire_dispatch_${activeDropData.code || 'archive'}.zip`;
+      a.download = `drop_${activeDropData.code || 'files'}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-
-      playSound('success');
-      showToast('ZIP Archive Downloaded');
+      showToast('ZIP downloaded');
     } catch (e) {
-      showToast('ZIP compression failed');
+      showToast('Compression failed');
     } finally {
-      btnDownloadAllZip.textContent = 'DOWNLOAD ALL (ZIP)';
+      btnDownloadAllZip.textContent = 'Download All (.zip)';
       btnDownloadAllZip.disabled = false;
     }
   }
 
-  // --- COUNTDOWN TIMER ---
-  function startExpiryCountdown(expiresAtIso, targetEl, prefix = '') {
+  // --- COUNTDOWN ---
+  function startExpiryCountdown(expiresAtIso, targetEl) {
     if (countdownTimer) clearInterval(countdownTimer);
     if (!expiresAtIso || !targetEl) return;
 
@@ -692,11 +566,11 @@
       const totalSec = Math.floor(diff / 1000);
       const mins = Math.floor(totalSec / 60);
       const secs = totalSec % 60;
-      targetEl.textContent = `${prefix}${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      targetEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
       if (diff <= 0) {
         clearInterval(countdownTimer);
-        targetEl.textContent = `${prefix}EXPIRED`;
+        targetEl.textContent = 'Expired';
       }
     }
 
@@ -716,7 +590,7 @@
   }
 
   // --- HELPERS ---
-  function resetSendForm() {
+  function resetForm() {
     inputText.value = '';
     stagedFiles = [];
     renderStagedFiles();
@@ -732,27 +606,26 @@
   }
 
   function escapeHtml(str) {
-    return (str || '').replace(/[&<>"']/g, function (m) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
-    });
+    return (str || '').replace(/[&<>"']/g, m => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[m]));
   }
 
   function showToast(msg) {
     const shelf = document.getElementById('toast-container');
     if (!shelf) return;
     const toast = document.createElement('div');
-    toast.className = 'deco-toast';
-    toast.innerHTML = `<span class="toast-diamond">◆</span> <span>${escapeHtml(msg)}</span>`;
+    toast.className = 'clean-toast';
+    toast.textContent = msg;
     shelf.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';
-      toast.style.transform = 'translateX(40px)';
-      toast.style.transition = 'all 300ms ease-out';
-      setTimeout(() => toast.remove(), 300);
-    }, 3200);
+      toast.style.transform = 'translateY(6px)';
+      toast.style.transition = 'all 150ms ease-out';
+      setTimeout(() => toast.remove(), 150);
+    }, 2800);
   }
 
-  // Run on DOM loaded
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

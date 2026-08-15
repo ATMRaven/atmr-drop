@@ -14,14 +14,12 @@ async function runFileVerification() {
 
   try {
     const page = await browser.newPage();
-    await page.setViewport({ width: 1200, height: 950, deviceScaleFactor: 2 });
+    await page.setViewport({ width: 1000, height: 850, deviceScaleFactor: 2 });
 
     console.log('Navigating to send view...');
     await page.goto('http://127.0.0.1:8787', { waitUntil: 'networkidle0' });
-    await page.click('#nav-mode-send');
-    await page.waitForSelector('#view-send.active');
 
-    // Create temporary dummy files to upload
+    // Create temporary dummy files
     const tmpImg = path.join(__dirname, 'test_image.png');
     const tmpDoc = path.join(__dirname, 'test_doc.pdf');
     fs.writeFileSync(tmpImg, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
@@ -31,7 +29,7 @@ async function runFileVerification() {
     const fileInput = await page.$('#file-input');
     await fileInput.uploadFile(tmpImg, tmpDoc);
 
-    await page.type('#input-text', '✦ Cross-device drop containing 1 image, 1 document, and this text snippet!');
+    await page.type('#input-text', 'Minimalist cross-device transfer with 1 photo and 1 PDF document.');
     await page.click('#check-burn');
 
     await new Promise((r) => setTimeout(r, 600));
@@ -49,16 +47,16 @@ async function runFileVerification() {
 
     // Open receiver
     const receiverPage = await browser.newPage();
-    await receiverPage.setViewport({ width: 1200, height: 950, deviceScaleFactor: 2 });
+    await receiverPage.setViewport({ width: 1000, height: 850, deviceScaleFactor: 2 });
     await receiverPage.goto(`http://127.0.0.1:8787/${pinCode}`, { waitUntil: 'networkidle0' });
-    await receiverPage.waitForSelector('#view-receive-content.active', { timeout: 10000 });
-    await new Promise((r) => setTimeout(r, 1000));
+    await receiverPage.waitForSelector('#view-vault.active', { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 800));
 
     const receiveScreenshotPath = path.join(ARTIFACT_DIR, 'screenshot_receive_files.png');
     await receiverPage.screenshot({ path: receiveScreenshotPath, fullPage: false });
     console.log('Saved screenshot_receive_files.png');
 
-    // Clean up tmp files
+    // Clean up
     if (fs.existsSync(tmpImg)) fs.unlinkSync(tmpImg);
     if (fs.existsSync(tmpDoc)) fs.unlinkSync(tmpDoc);
 
