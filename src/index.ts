@@ -83,8 +83,25 @@ export default {
 
     // Version check endpoint
     if (pathname === '/api/version') {
+      try {
+        const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest', {
+          headers: { 'User-Agent': 'atmr-drop-worker' },
+        });
+        if (ghRes.ok) {
+          const ghData: any = await ghRes.json();
+          const tag = (ghData.tag_name || '').replace(/^v/, '').trim();
+          return jsonResponse({
+            version: tag,
+            downloadUrl: ghData.assets?.[0]?.browser_download_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
+            releasePage: ghData.html_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest',
+            mandatory: false,
+            releaseNotes: ghData.body || 'Performance enhancements and bug fixes.',
+          });
+        }
+      } catch (e) {}
+
       return jsonResponse({
-        version: '1.0.6',
+        version: '1.0.8',
         downloadUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
         releasePage: 'https://github.com/ATMRaven/atmr-drop/releases/latest',
         mandatory: false,

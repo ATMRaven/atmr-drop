@@ -101,7 +101,7 @@
   let mediaStream = null;
 
   // --- APP VERSION & UPDATE STATE ---
-  const APP_CURRENT_VERSION = '1.0.6';
+  const APP_CURRENT_VERSION = (window.APP_VERSION || '1.0.8').replace(/^v/, '').trim();
   let isUpdateMandatory = false;
 
   const updateModal = document.getElementById('update-modal');
@@ -139,7 +139,7 @@
         const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest');
         if (ghRes.ok) {
           const ghData = await ghRes.json();
-          const tag = (ghData.tag_name || '').replace(/^v/, '');
+          const tag = (ghData.tag_name || '').replace(/^v/, '').trim();
           data = {
             version: tag,
             downloadUrl: ghData.assets?.[0]?.browser_download_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
@@ -149,8 +149,12 @@
         }
       }
 
-      if (data && data.version && isNewerVersion(data.version, APP_CURRENT_VERSION)) {
-        displayUpdateModal(data);
+      if (data && data.version) {
+        const isNew = isNewerVersion(data.version, APP_CURRENT_VERSION);
+        console.log(`[Version Check] Installed: v${APP_CURRENT_VERSION} | Latest: v${data.version} | Update needed: ${isNew}`);
+        if (isNew) {
+          displayUpdateModal(data);
+        }
       }
     } catch (err) {
       console.warn('Update check failed (offline or rate limited):', err);
@@ -158,8 +162,13 @@
   }
 
   function isNewerVersion(remote, local) {
-    const rParts = remote.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
-    const lParts = local.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    if (!remote || !local) return false;
+    const rClean = remote.replace(/^v/, '').trim();
+    const lClean = local.replace(/^v/, '').trim();
+    if (rClean === lClean) return false;
+
+    const rParts = rClean.split('.').map(n => parseInt(n, 10) || 0);
+    const lParts = lClean.split('.').map(n => parseInt(n, 10) || 0);
     for (let i = 0; i < Math.max(rParts.length, lParts.length); i++) {
       const r = rParts[i] || 0;
       const l = lParts[i] || 0;
