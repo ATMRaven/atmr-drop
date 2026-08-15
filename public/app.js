@@ -107,12 +107,15 @@
 
   function isCapacitorNative() {
     return (
-      (typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ||
+      (typeof window.Capacitor !== 'undefined' && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
       window.location.protocol === 'capacitor:' ||
-      window.location.protocol === 'file:' ||
-      (window.location.hostname === 'localhost' && !window.location.port) ||
-      (window.location.hostname === '127.0.0.1' && !window.location.port)
+      window.location.protocol === 'file:'
     );
+  }
+
+  function isMobileWeb() {
+    if (isCapacitorNative()) return false;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 640;
   }
 
   function getApiUrl(path) {
@@ -138,12 +141,45 @@
     setupCamera();
     setupActions();
     setupUpdateModal();
+    setupMobileAppBanner();
     checkDirectPinRoute();
     checkAppUpdate();
   }
 
-  // --- IN-APP UPDATE CHECKER ---
+  // --- MOBILE WEB PROMO BANNER ---
+  function setupMobileAppBanner() {
+    const banner = document.getElementById('mobile-app-banner');
+    const btnDismiss = document.getElementById('btn-dismiss-app-banner');
+    if (!banner) return;
+
+    // Never show promo banner inside the native installed app
+    if (isCapacitorNative()) {
+      banner.classList.add('hidden');
+      return;
+    }
+
+    const dismissed = localStorage.getItem('atmr_app_promo_dismissed') === 'true';
+    if (isMobileWeb() && !dismissed) {
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
+
+    if (btnDismiss) {
+      btnDismiss.addEventListener('click', () => {
+        banner.classList.add('hidden');
+        localStorage.setItem('atmr_app_promo_dismissed', 'true');
+      });
+    }
+  }
+
+  // --- IN-APP UPDATE CHECKER (NATIVE MOBILE ONLY) ---
   async function checkAppUpdate() {
+    // CRITICAL: Web app visitors are already running the latest web code; only prompt APK updates in native app
+    if (!isCapacitorNative()) {
+      return;
+    }
+
     try {
       // Check Worker version API first
       let data = null;
@@ -542,6 +578,17 @@
       pinCells.forEach(c => c.value = '');
       switchTab('receive');
     });
+
+    // Delegate click on individual file download buttons
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.btn-download-file');
+      if (!btn) return;
+      e.preventDefault();
+      const code = btn.dataset.code;
+      const fileId = btn.dataset.id;
+      const fileName = btn.dataset.name || 'download';
+      await downloadSingleFile(code, fileId, fileName, btn);
+    });
   }
 
   function displayShareScreen(data) {
@@ -631,13 +678,14 @@
       receivedImagesGrid.innerHTML = '';
 
       images.forEach(img => {
+        const fileUrl = img.dataBase64 || getApiUrl(`/api/file/${drop.code}/${img.id}`);
         const item = document.createElement('div');
         item.className = 'gallery-item';
         item.innerHTML = `
-          <img src="${img.dataBase64}" class="gallery-img" alt="${escapeHtml(img.name)}">
+          <img src="${fileUrl}" class="gallery-img" alt="${escapeHtml(img.name)}" loading="lazy">
           <div class="gallery-item-footer">
-            <span class="gallery-item-name">${escapeHtml(img.name)}</span>
-            <a href="${img.dataBase64}" download="${escapeHtml(img.name)}" class="btn-ghost sm">Save</a>
+            <span class="gallery-item-name" title="${escapeHtml(img.name)}">${escapeHtml(img.name)}</span>
+            <button type="button" class="btn-ghost sm btn-download-file" data-code="${drop.code}" data-id="${img.id}" data-name="${escapeHtml(img.name)}">Save</button>
           </div>
         `;
         receivedImagesGrid.appendChild(item);
@@ -657,10 +705,10 @@
         row.className = 'file-row';
         row.innerHTML = `
           <div class="file-row-info">
-            <span class="file-row-name">${escapeHtml(file.name)}</span>
+            <span class="file-row-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
             <span class="file-row-meta">${formatFileSize(file.size)}</span>
           </div>
-          <a href="${file.dataBase64}" download="${escapeHtml(file.name)}" class="btn-secondary sm">Download</a>
+          <button type="button" class="btn-secondary sm btn-download-file" data-code="${drop.code}" data-id="${file.id}" data-name="${escapeHtml(file.name)}">Download</button>
         `;
         receivedFilesList.appendChild(row);
       });
@@ -671,6 +719,42 @@
     switchTab('vault');
   }
 
+  // --- SINGLE FILE DOWNLOADER ---
+  async function downloadSingleFile(code, fileId, fileName, btnEl) {
+    const originalText = btnEl ? btnEl.textContent : '';
+    if (btnEl) {
+      btnEl.textContent = '...';
+      btnEl.disabled = true;
+    }
+
+    try {
+      showToast(`Downloading ${fileName}...`);
+      const fileUrl = getApiUrl(`/api/file/${code}/${fileId}?download=true`);
+      const res = await fetch(fileUrl);
+      if (!res.ok) throw new Error('File download failed');
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+      showToast('Download complete');
+    } catch (err) {
+      console.warn('Direct blob download fallback to window.open:', err);
+      window.open(getApiUrl(`/api/file/${code}/${fileId}?download=true`), '_blank');
+      showToast('Download started');
+    } finally {
+      if (btnEl) {
+        btnEl.textContent = originalText;
+        btnEl.disabled = false;
+      }
+    }
+  }
+
   // --- ZIP ARCHIVER ---
   async function downloadZip() {
     if (!activeDropData || !activeDropData.files || !activeDropData.files.length) return;
@@ -679,20 +763,34 @@
       return;
     }
 
-    btnDownloadAllZip.textContent = 'Zipping...';
+    btnDownloadAllZip.textContent = 'Downloading...';
     btnDownloadAllZip.disabled = true;
 
     try {
       const zip = new JSZip();
-      for (const file of activeDropData.files) {
-        const base64Data = file.dataBase64.split(',')[1];
-        zip.file(file.name, base64Data, { base64: true });
+
+      for (let i = 0; i < activeDropData.files.length; i++) {
+        const file = activeDropData.files[i];
+        btnDownloadAllZip.textContent = `Zipping (${i + 1}/${activeDropData.files.length})...`;
+
+        if (file.dataBase64) {
+          const base64Data = file.dataBase64.includes(',') ? file.dataBase64.split(',')[1] : file.dataBase64;
+          zip.file(file.name, base64Data, { base64: true });
+        } else {
+          const fileUrl = getApiUrl(`/api/file/${activeDropData.code}/${file.id}`);
+          const res = await fetch(fileUrl);
+          if (res.ok) {
+            const blob = await res.blob();
+            zip.file(file.name, blob);
+          }
+        }
       }
 
       if (activeDropData.text) {
         zip.file('note.txt', activeDropData.text);
       }
 
+      btnDownloadAllZip.textContent = 'Compressing...';
       const content = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(content);
       const a = document.createElement('a');
@@ -701,9 +799,10 @@
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
       showToast('ZIP downloaded');
     } catch (e) {
+      console.error('ZIP error:', e);
       showToast('Compression failed');
     } finally {
       btnDownloadAllZip.textContent = 'Download All (.zip)';

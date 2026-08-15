@@ -34,6 +34,7 @@ const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-Requested-With, X-Action',
+  'Access-Control-Expose-Headers': 'Content-Disposition, Content-Length, Content-Type',
 };
 
 function jsonResponse(data: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
@@ -312,7 +313,9 @@ async function handleGetFile(code: string, fileId: string, isDownload: boolean, 
       const r2Object = await env.ATMR_DROP_R2.get(r2Key);
       if (r2Object) {
         const meta = r2Object.customMetadata || {};
-        const filename = encodeURIComponent(meta.name || `file-${fileId}`);
+        const rawName = meta.name || `file-${fileId}`;
+        const safeAsciiName = rawName.replace(/["\r\n\\]/g, '_');
+        const encodedUtf8Name = encodeURIComponent(rawName);
         const contentType = r2Object.httpMetadata?.contentType || 'application/octet-stream';
         const dispositionType = isDownload ? 'attachment' : 'inline';
 
@@ -320,7 +323,7 @@ async function handleGetFile(code: string, fileId: string, isDownload: boolean, 
           status: 200,
           headers: {
             'Content-Type': contentType,
-            'Content-Disposition': `${dispositionType}; filename="${filename}"; filename*=UTF-8''${filename}`,
+            'Content-Disposition': `${dispositionType}; filename="${safeAsciiName}"; filename*=UTF-8''${encodedUtf8Name}`,
             'Content-Length': r2Object.size.toString(),
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             ...corsHeaders,
@@ -339,15 +342,17 @@ async function handleGetFile(code: string, fileId: string, isDownload: boolean, 
     }
 
     const meta = fileResult.metadata || { name: `file-${fileId}`, type: 'application/octet-stream', size: 0 };
+    const rawName = meta.name || `file-${fileId}`;
+    const safeAsciiName = rawName.replace(/["\r\n\\]/g, '_');
+    const encodedUtf8Name = encodeURIComponent(rawName);
     const contentType = meta.type || 'application/octet-stream';
     const dispositionType = isDownload ? 'attachment' : 'inline';
-    const filename = encodeURIComponent(meta.name || 'file');
 
     return new Response(fileResult.value, {
       status: 200,
       headers: {
         'Content-Type': contentType,
-        'Content-Disposition': `${dispositionType}; filename="${filename}"; filename*=UTF-8''${filename}`,
+        'Content-Disposition': `${dispositionType}; filename="${safeAsciiName}"; filename*=UTF-8''${encodedUtf8Name}`,
         'Content-Length': fileResult.value.byteLength.toString(),
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         ...corsHeaders,

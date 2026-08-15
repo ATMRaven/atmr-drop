@@ -30,6 +30,27 @@
       </div>
     </header>
 
+    <!-- Mobile App Suggestion Banner (Only on Web Mobile Browsers) -->
+    <aside id="mobile-app-banner" class="app-banner hidden" aria-label="Get the Mobile App">
+      <div class="app-banner-content">
+        <div class="app-banner-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+        </div>
+        <div class="app-banner-text">
+          <span class="app-banner-title">Experience Drop for Android</span>
+          <span class="app-banner-desc">Faster background transfers &amp; push drops</span>
+        </div>
+      </div>
+      <div class="app-banner-actions">
+        <a href="https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk" class="btn-primary sm btn-banner-download" target="_blank" rel="noopener">
+          Get APK
+        </a>
+        <button type="button" id="btn-dismiss-app-banner" class="btn-ghost-icon" title="Dismiss" aria-label="Dismiss">
+          &times;
+        </button>
+      </div>
+    </aside>
+
     <!-- Segmented Pill Control (Send / Receive) -->
     <div class="tab-control" role="tablist">
       <button id="tab-send" class="tab-btn active" role="tab" aria-selected="true" aria-controls="view-send">

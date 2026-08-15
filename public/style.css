@@ -141,6 +141,103 @@ html, body {
 }
 
 /* --------------------------------------------------------------------------
+   MOBILE APP SUGGESTION BANNER (WEB MOBILE ONLY)
+   -------------------------------------------------------------------------- */
+.app-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: var(--radius-inner);
+  padding: 10px 14px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: smoothFadeIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.app-banner.hidden {
+  display: none !important;
+}
+
+.app-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.app-banner-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.app-banner-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-banner-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-pure);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-banner-desc {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-banner-download {
+  text-decoration: none;
+  font-size: 0.78rem !important;
+  padding: 6px 12px !important;
+  height: 28px !important;
+  background: linear-gradient(135deg, #0284c7, #0369a1) !important;
+  box-shadow: 0 2px 10px rgba(2, 132, 199, 0.4) !important;
+}
+
+.btn-ghost-icon {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color var(--transition-smooth);
+}
+
+.btn-ghost-icon:hover {
+  color: var(--text-pure);
+}
+
+/* --------------------------------------------------------------------------
    SEGMENTED PILL TAB CONTROL
    -------------------------------------------------------------------------- */
 .tab-control {
