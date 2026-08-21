@@ -668,17 +668,33 @@ html, body {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-pill);
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
+  color: var(--text-primary);
   font-size: 0.8rem;
-  padding: 4px 12px;
+  padding: 6px 12px;
   outline: none;
   cursor: pointer;
-  transition: border-color var(--transition-smooth);
+  transition: all var(--transition-smooth);
 }
 
 .clean-select:focus {
   border-color: #6366f1;
+}
+
+.clean-select option {
+  background: #111524;
+  color: var(--text-primary);
+}
+
+.ttl-limit-notice {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  animation: smoothFadeIn 150ms ease-out forwards;
+  white-space: nowrap;
 }
 
 /* Clean Toggle */
@@ -934,6 +950,46 @@ html, body {
   padding: 4px 10px;
   border-radius: var(--radius-pill);
   color: #a5b4fc;
+}
+
+/* Drop Picked Up Banner */
+.share-pickup-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(5, 150, 105, 0.18) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  border-radius: var(--radius-input);
+  padding: 10px 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 20px rgba(16, 185, 129, 0.2);
+  animation: smoothFadeIn 220ms ease-out forwards;
+}
+
+.pickup-pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 10px #34d399;
+  animation: pulseDot 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.pickup-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pickup-heading {
+  font-size: 0.85rem;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.pickup-desc {
+  font-size: 0.72rem;
+  color: #a7f3d0;
 }
 
 /* PIN Hero Card */

@@ -149,11 +149,15 @@
   const fileInput = document.getElementById('file-input');
   const stagedChipsList = document.getElementById('staged-files-list');
   const selectTtl = document.getElementById('select-ttl');
+  const ttlLimitNotice = document.getElementById('ttl-limit-notice');
   const checkBurn = document.getElementById('check-burn');
   const btnSendDrop = document.getElementById('btn-send-drop');
   const btnCamera = document.getElementById('btn-camera');
 
   // Share elements
+  const sharePickupBanner = document.getElementById('share-pickup-banner');
+  const shareStatusDot = document.getElementById('share-status-dot');
+  const shareStatusText = document.getElementById('share-status-text');
   const btnCopyPin = document.getElementById('btn-copy-pin');
   const sharePinCode = document.getElementById('share-pin-code');
   const shareDropInfo = document.getElementById('share-drop-info');
@@ -830,8 +834,8 @@
 
   function handleFiles(files) {
     const totalSize = stagedFiles.reduce((acc, f) => acc + f.size, 0) + files.reduce((acc, f) => acc + f.size, 0);
-    if (totalSize > 5000 * 1024 * 1024) {
-      showToast('Combined files exceed 5 GB maximum limit.');
+    if (totalSize > 10000 * 1024 * 1024) {
+      showToast('Combined files exceed 10 GB maximum limit.');
       return;
     }
 
@@ -855,6 +859,28 @@
   }
 
   function renderStagedFiles() {
+    const totalSizeBytes = stagedFiles.reduce((acc, f) => acc + f.size, 0);
+
+    // Smart TTL limit for large files (> 1 GB)
+    if (selectTtl) {
+      if (totalSizeBytes > 1024 * 1024 * 1024) {
+        if (ttlLimitNotice) ttlLimitNotice.classList.remove('hidden');
+        Array.from(selectTtl.options).forEach(opt => {
+          if (parseInt(opt.value, 10) > 3600) {
+            opt.disabled = true;
+          }
+        });
+        if (parseInt(selectTtl.value, 10) > 3600) {
+          selectTtl.value = '3600';
+        }
+      } else {
+        if (ttlLimitNotice) ttlLimitNotice.classList.add('hidden');
+        Array.from(selectTtl.options).forEach(opt => {
+          opt.disabled = false;
+        });
+      }
+    }
+
     if (stagedFiles.length === 0) {
       stagedChipsList.classList.add('hidden');
       stagedChipsList.innerHTML = '';
@@ -1024,6 +1050,7 @@
     });
 
     btnCancelDrop.addEventListener('click', async () => {
+      stopPickupWatcher();
       if (activeDropData && activeDropData.code) {
         try {
           await fetch(getApiUrl(`/api/drop/${activeDropData.code}`), { method: 'DELETE' });
@@ -1036,6 +1063,7 @@
     });
 
     btnNewSend.addEventListener('click', () => {
+      stopPickupWatcher();
       isExplicitNewSend = true;
       clearActiveSenderDrop();
       resetForm();
@@ -1071,12 +1099,105 @@
     });
   }
 
+  // --- REAL-TIME DROP PICKUP WATCHER ---
+  let pickupPollTimer = null;
+  let hasNotifiedPickup = false;
+
+  function stopPickupWatcher() {
+    if (pickupPollTimer) {
+      clearInterval(pickupPollTimer);
+      pickupPollTimer = null;
+    }
+  }
+
+  function startPickupWatcher(code) {
+    stopPickupWatcher();
+    hasNotifiedPickup = false;
+
+    // Request notification permission if not yet decided
+    if ('Notification' in window && Notification.permission === 'default') {
+      try {
+        Notification.requestPermission().catch(() => {});
+      } catch (e) {}
+    }
+
+    console.log('[PickupWatcher] Starting watcher for code:', code);
+    pickupPollTimer = setInterval(async () => {
+      if (!code || hasNotifiedPickup) {
+        stopPickupWatcher();
+        return;
+      }
+      try {
+        const fetchUrl = getApiUrl(`/api/drop/${code}?peek=true`);
+        const res = await fetch(fetchUrl);
+        if (!res.ok) return;
+        const data = await res.json();
+        console.log('[PickupWatcher] Poll result:', JSON.stringify(data));
+        if (data && data.success && data.drop) {
+          if (data.drop.pickedUp || (data.drop.retrievedCount && data.drop.retrievedCount > 0) || data.drop.pickedUpAt) {
+            hasNotifiedPickup = true;
+            stopPickupWatcher();
+
+            // Play celebratory success chime
+            playChime('success');
+
+            // Show celebratory banner
+            if (sharePickupBanner) {
+              sharePickupBanner.classList.remove('hidden');
+            }
+            if (shareStatusText) {
+              shareStatusText.textContent = 'Drop Picked Up! ✓';
+            }
+            if (shareStatusDot) {
+              shareStatusDot.style.background = '#34d399';
+              shareStatusDot.style.boxShadow = '0 0 10px #34d399';
+            }
+
+            showToast(`Drop #${code} was picked up! 🎉`);
+
+            // Native push notification if supported & permitted
+            if ('Notification' in window && Notification.permission === 'granted') {
+              try {
+                new Notification('Drop Picked Up! 🎉', {
+                  body: `PIN #${code} was just opened and retrieved on another device.`,
+                  icon: '/icons/icon-192.png'
+                });
+              } catch (notifErr) {}
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[PickupWatcher] Poll error:', e);
+      }
+    }, 2000);
+  }
+
   function displayShareScreen(data) {
     sharePinCode.textContent = data.code;
     const directUrl = data.directUrl || (isCapacitorNative() ? `${PROD_API_ORIGIN}/${data.code}` : `${window.location.origin}/${data.code}`);
     shareDirectUrl.value = directUrl;
 
     renderQr(directUrl);
+
+    // Setup Pickup Status Banner
+    if (sharePickupBanner) {
+      if (data.pickedUp || (data.retrievedCount && data.retrievedCount > 0) || data.pickedUpAt) {
+        sharePickupBanner.classList.remove('hidden');
+        if (shareStatusText) shareStatusText.textContent = 'Drop Picked Up! ✓';
+        if (shareStatusDot) {
+          shareStatusDot.style.background = '#34d399';
+          shareStatusDot.style.boxShadow = '0 0 10px #34d399';
+        }
+      } else {
+        sharePickupBanner.classList.add('hidden');
+        if (shareStatusText) shareStatusText.textContent = 'Ready to receive';
+        if (shareStatusDot) {
+          shareStatusDot.style.background = '';
+          shareStatusDot.style.boxShadow = '';
+        }
+        startPickupWatcher(data.code);
+      }
+    }
 
     // Render Payload Overview / Summary
     const text = data.text || '';
@@ -1378,6 +1499,7 @@
       if (diff <= 0) {
         clearInterval(countdownTimer);
         targetEl.textContent = 'Expired';
+        stopPickupWatcher();
         clearActiveSenderDrop();
       }
     }

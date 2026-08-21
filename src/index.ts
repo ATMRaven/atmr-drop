@@ -268,6 +268,23 @@ async function handleGetDrop(code: string, isPeek: boolean, env: Env): Promise<R
 
     const raw = await env.ATMR_DROP_KV.get(`drop:${code}`);
     if (!raw) {
+      // If drop not in KV, check if it was just burned and marked as picked up
+      if (isPeek) {
+        const pickupRaw = await env.ATMR_DROP_KV.get(`pickup:${code}`);
+        if (pickupRaw) {
+          const pData = JSON.parse(pickupRaw);
+          return jsonResponse({
+            success: true,
+            drop: {
+              code,
+              pickedUp: true,
+              pickedUpAt: pData.pickedUpAt,
+              retrievedCount: 1,
+              remainingSeconds: 0,
+            },
+          });
+        }
+      }
       return jsonResponse({ error: 'Drop not found or has expired' }, 404);
     }
 
@@ -281,17 +298,31 @@ async function handleGetDrop(code: string, isPeek: boolean, env: Env): Promise<R
       return jsonResponse({ error: 'Drop has expired' }, 404);
     }
 
-    // If burnAfterRead and not just a peek/status check, burn the drop metadata from KV
-    if (drop.burnAfterRead && !isPeek) {
-      drop.retrievedCount += 1;
-      // Immediately delete drop PIN metadata from KV so no new sessions can query this drop
-      await env.ATMR_DROP_KV.delete(`drop:${code}`);
+    // If receiver is fetching (not just a sender peek)
+    if (!isPeek) {
+      drop.retrievedCount = (drop.retrievedCount || 0) + 1;
+      drop.pickedUpAt = drop.pickedUpAt || now;
+
+      if (drop.burnAfterRead) {
+        // Record pickup marker for 120 seconds so sender receives pickup confirmation
+        await env.ATMR_DROP_KV.put(`pickup:${code}`, JSON.stringify({ pickedUp: true, pickedUpAt: now }), {
+          expirationTtl: 120,
+        });
+        // Immediately delete drop PIN metadata from KV so no subsequent sessions can retrieve it
+        await env.ATMR_DROP_KV.delete(`drop:${code}`);
+      } else {
+        // Update retrieved count and pickedUpAt timestamp in KV
+        await env.ATMR_DROP_KV.put(`drop:${code}`, JSON.stringify(drop), {
+          expirationTtl: remainingSeconds,
+        });
+      }
     }
 
     return jsonResponse({
       success: true,
       drop: {
         ...drop,
+        pickedUp: (drop.retrievedCount || 0) > 0,
         remainingSeconds,
       },
     });

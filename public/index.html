@@ -113,7 +113,7 @@
               </div>
               <div class="dropzone-text">
                 <span class="dropzone-title">Drop files here or browse</span>
-                <span class="dropzone-sub">Images, videos, documents &amp; large files up to 5 GB</span>
+                <span class="dropzone-sub">Images, videos, documents &amp; large files up to 10 GB</span>
               </div>
             </div>
             <button type="button" id="btn-camera" class="btn-camera-snap" title="Take photo with camera">
@@ -135,6 +135,7 @@
               <option value="3600">1 hour</option>
               <option value="86400">24 hours</option>
             </select>
+            <span id="ttl-limit-notice" class="ttl-limit-notice hidden">⚠️ Files &gt;1GB capped at 1h</span>
           </div>
           <div class="option-item">
             <label class="clean-toggle">
@@ -181,10 +182,19 @@
       <!-- ================= VIEW 3: SHARE (ACTIVE PIN & QR) ================= -->
       <section id="view-share" class="view-panel">
         
+        <!-- Drop Picked Up Banner -->
+        <div id="share-pickup-banner" class="share-pickup-banner hidden">
+          <div class="pickup-pulse-dot"></div>
+          <div class="pickup-banner-text">
+            <strong class="pickup-heading">Drop Picked Up! 🎉</strong>
+            <span class="pickup-desc">Retrieved on receiver's device</span>
+          </div>
+        </div>
+
         <div class="share-header">
           <div class="pulse-indicator">
-            <span class="pulse-dot"></span>
-            <span class="pulse-text">Ready to receive</span>
+            <span class="pulse-dot" id="share-status-dot"></span>
+            <span class="pulse-text" id="share-status-text">Ready to receive</span>
           </div>
           <span id="share-time-left" class="time-badge">14:59</span>
         </div>

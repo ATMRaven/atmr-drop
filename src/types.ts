@@ -13,6 +13,8 @@ export interface DropMetadata {
   ttlSeconds: number;
   burnAfterRead: boolean;
   retrievedCount: number;
+  pickedUp?: boolean;
+  pickedUpAt?: number;
   text?: string;
   textType?: string;
   files: FileEntry[];
