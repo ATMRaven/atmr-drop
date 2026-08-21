@@ -82,9 +82,59 @@ export default {
       return handleDeleteDrop(code, env);
     }
 
-    // Dedicated in-app APK streaming route with CORS & edge caching
+    // Database APK binary upload route (authenticated for CI/CD)
+    if (pathname === '/api/apk/upload' && request.method === 'POST') {
+      const deployKey = request.headers.get('X-Deploy-Key') || url.searchParams.get('key');
+      if (deployKey !== 'atmr_drop_deploy_key_2026') {
+        return jsonResponse({ error: 'Unauthorized: Invalid deploy key' }, 401);
+      }
+
+      try {
+        const version = url.searchParams.get('version') || request.headers.get('X-App-Version') || 'latest';
+        const buffer = await request.arrayBuffer();
+        if (!buffer || buffer.byteLength === 0) {
+          return jsonResponse({ error: 'Empty binary payload' }, 400);
+        }
+
+        // Store APK binary directly in Cloudflare KV Database (overwriting & replacing previous version)
+        await env.ATMR_DROP_KV.put('latest_apk_binary', buffer);
+        await env.ATMR_DROP_KV.put('latest_apk_meta', JSON.stringify({
+          version: version.replace(/^v/, '').trim(),
+          size: buffer.byteLength,
+          uploadedAt: Date.now(),
+        }));
+
+        return jsonResponse({
+          success: true,
+          message: 'APK stored in KV database. Previous version replaced.',
+          version,
+          size: buffer.byteLength,
+        });
+      } catch (err: any) {
+        return jsonResponse({ error: 'Failed to store APK in database: ' + (err.message || String(err)) }, 500);
+      }
+    }
+
+    // Dedicated in-app APK streaming route: reads directly from KV Database with fallback
     if (pathname === '/api/apk/latest' || pathname === '/api/apk') {
       try {
+        // 1. Try reading directly from KV Database
+        const kvBinary = await env.ATMR_DROP_KV.get('latest_apk_binary', { type: 'arrayBuffer' });
+        if (kvBinary && kvBinary.byteLength > 0) {
+          return new Response(kvBinary, {
+            status: 200,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/vnd.android.package-archive',
+              'Content-Disposition': 'attachment; filename="atmr-drop.apk"',
+              'Content-Length': String(kvBinary.byteLength),
+              'Cache-Control': 'public, max-age=60',
+              'X-Source': 'Cloudflare-KV-Database',
+            },
+          });
+        }
+
+        // 2. Secondary fallback: Stream from GitHub Releases
         let downloadUrl = 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
         try {
           const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest', {
@@ -112,6 +162,7 @@ export default {
           'Content-Type': 'application/vnd.android.package-archive',
           'Content-Disposition': 'attachment; filename="atmr-drop.apk"',
           'Cache-Control': 'public, max-age=180',
+          'X-Source': 'GitHub-Releases-Fallback',
         };
 
         const len = apkRes.headers.get('content-length');
@@ -128,28 +179,46 @@ export default {
       }
     }
 
-    // Version check endpoint
+    // Version check endpoint: checks database metadata first
     if (pathname === '/api/version') {
       try {
+        let kvMeta: any = null;
+        try {
+          const metaStr = await env.ATMR_DROP_KV.get('latest_apk_meta');
+          if (metaStr) kvMeta = JSON.parse(metaStr);
+        } catch (e) {}
+
         const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest', {
           headers: { 'User-Agent': 'atmr-drop-worker' },
         });
+        let ghTag = '';
+        let ghNotes = '';
+        let ghAssetUrl = '';
+        let ghPage = '';
+
         if (ghRes.ok) {
           const ghData: any = await ghRes.json();
-          const tag = (ghData.tag_name || '').replace(/^v/, '').trim();
-          let cleanNotes = ghData.body || '';
-          if (cleanNotes.includes('The Daily Drop') || cleanNotes.includes('Published by')) {
-            cleanNotes = '• Real-time in-app direct APK streaming downloader with live progress bar\n• Real-time upload status bar with speed & byte tracking\n• Instant drop pickup detection, audio chime & push notifications\n• Smart 1-hour expiration cap for files > 1 GB & 10 GB capacity\n• Performance optimizations and bug fixes';
-          }
-          return jsonResponse({
-            version: tag,
-            downloadUrl: '/api/apk/latest',
-            fallbackUrl: ghData.assets?.[0]?.browser_download_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
-            releasePage: ghData.html_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest',
-            mandatory: false,
-            releaseNotes: cleanNotes || 'Performance enhancements and bug fixes.',
-          });
+          ghTag = (ghData.tag_name || '').replace(/^v/, '').trim();
+          ghNotes = ghData.body || '';
+          ghAssetUrl = ghData.assets?.[0]?.browser_download_url || '';
+          ghPage = ghData.html_url || '';
         }
+
+        const effectiveVersion = kvMeta?.version || ghTag || '1.0.24';
+        let cleanNotes = ghNotes;
+        if (!cleanNotes || cleanNotes.includes('The Daily Drop') || cleanNotes.includes('Published by')) {
+          cleanNotes = '• Real-time in-app direct APK streaming downloader with live progress bar\n• Real-time upload status bar with live speed & byte tracking\n• Instant drop pickup detection, audio chime & push notifications\n• Smart 1-hour expiration cap for files > 1 GB & 10 GB capacity\n• Performance optimizations and bug fixes';
+        }
+
+        return jsonResponse({
+          version: effectiveVersion,
+          downloadUrl: '/api/apk/latest',
+          fallbackUrl: ghAssetUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
+          releasePage: ghPage || 'https://github.com/ATMRaven/atmr-drop/releases/latest',
+          mandatory: false,
+          releaseNotes: cleanNotes || 'Performance enhancements and bug fixes.',
+          source: kvMeta ? 'database' : 'github',
+        });
       } catch (e) {}
 
       return jsonResponse({

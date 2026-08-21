@@ -54,6 +54,15 @@ jobs:
       - name: Name release APK
         run: cp android/app/build/outputs/apk/release/app-release.apk atmr-drop.apk
 
+      - name: Upload APK Binary to Cloudflare KV Database
+        run: |
+          echo "Uploading APK to Cloudflare Database..."
+          curl -f -s -X POST "https://drop.atmr.workers.dev/api/apk/upload?version=1.0.${{ github.run_number }}" \
+            -H "X-Deploy-Key: atmr_drop_deploy_key_2026" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            --data-binary "@atmr-drop.apk"
+          echo "APK successfully stored in Cloudflare database for direct in-app downloads!"
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -67,9 +76,9 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: The Daily Drop Android v1.0.${{ github.run_number }}
           body: |
-            • Real-time in-app direct APK streaming downloader with live progress bar
+            • True direct in-app APK downloader and self-updater
+            • Real-time download progress bar in update modal
+            • APK stored directly in Cloudflare KV database
             • Real-time upload status bar with live speed & transferred byte tracking
             • Instant drop pickup detection, celebratory audio chime & native push notifications
-            • Smart 1-hour expiration cap for files > 1 GB & 10 GB capacity
-            • Performance optimizations & background transfer enhancements
           files: atmr-drop.apk
