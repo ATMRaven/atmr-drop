@@ -154,6 +154,14 @@
   const btnSendDrop = document.getElementById('btn-send-drop');
   const btnCamera = document.getElementById('btn-camera');
 
+  // Real-time Upload Progress elements
+  const uploadProgressContainer = document.getElementById('upload-progress-container');
+  const uploadStatusText = document.getElementById('upload-status-text');
+  const uploadPercentBadge = document.getElementById('upload-percent-badge');
+  const uploadProgressBar = document.getElementById('upload-progress-bar');
+  const uploadBytesText = document.getElementById('upload-bytes-text');
+  const uploadSpeedText = document.getElementById('upload-speed-text');
+
   // Share elements
   const sharePickupBanner = document.getElementById('share-pickup-banner');
   const shareStatusDot = document.getElementById('share-status-dot');
@@ -977,6 +985,80 @@
       });
     }
 
+    function uploadDropWithProgress(payload) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const startTime = performance.now();
+        const totalEstimatedBytes = (payload.files || []).reduce((acc, f) => acc + (f.size || 0), 0) + (payload.text ? payload.text.length : 0);
+
+        // Show and initialize upload progress container
+        if (uploadProgressContainer) {
+          uploadProgressContainer.classList.remove('hidden');
+          if (uploadProgressBar) uploadProgressBar.style.width = '0%';
+          if (uploadPercentBadge) uploadPercentBadge.textContent = '0%';
+          const fileCount = (payload.files || []).length;
+          if (uploadStatusText) {
+            if (fileCount > 0) {
+              uploadStatusText.textContent = `Uploading ${fileCount} file${fileCount > 1 ? 's' : ''}...`;
+            } else {
+              uploadStatusText.textContent = 'Encrypting & uploading...';
+            }
+          }
+          if (uploadBytesText) uploadBytesText.textContent = `0 B / ${formatFileSize(totalEstimatedBytes || 1024)}`;
+          if (uploadSpeedText) uploadSpeedText.textContent = '0 KB/s';
+        }
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && uploadProgressContainer) {
+            const percent = Math.min(98, Math.round((event.loaded / event.total) * 100));
+            if (uploadProgressBar) uploadProgressBar.style.width = `${percent}%`;
+            if (uploadPercentBadge) uploadPercentBadge.textContent = `${percent}%`;
+
+            const elapsedSec = (performance.now() - startTime) / 1000;
+            const speed = elapsedSec > 0 ? event.loaded / elapsedSec : 0;
+            if (uploadBytesText) uploadBytesText.textContent = `${formatFileSize(event.loaded)} / ${formatFileSize(event.total)}`;
+            if (uploadSpeedText) uploadSpeedText.textContent = `${formatFileSize(speed)}/s`;
+          }
+        };
+
+        xhr.onload = () => {
+          if (uploadProgressContainer) {
+            if (uploadProgressBar) uploadProgressBar.style.width = '100%';
+            if (uploadPercentBadge) uploadPercentBadge.textContent = '100%';
+            if (uploadStatusText) uploadStatusText.textContent = 'Finalizing wire drop...';
+          }
+
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              resolve(data);
+            } catch (e) {
+              reject(new Error('Server returned an invalid response.'));
+            }
+          } else {
+            try {
+              const errData = JSON.parse(xhr.responseText);
+              reject(new Error(errData.error || `Upload failed with status ${xhr.status}`));
+            } catch (e) {
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error('Network connection error during upload.'));
+        };
+
+        xhr.ontimeout = () => {
+          reject(new Error('Upload request timed out.'));
+        };
+
+        xhr.open('POST', getApiUrl('/api/drop'));
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send(JSON.stringify(payload));
+      });
+    }
+
     btnSendDrop.addEventListener('click', async () => {
       const text = inputText.value.trim();
       if (!text && stagedFiles.length === 0) {
@@ -996,18 +1078,7 @@
           burnAfterRead: checkBurn.checked
         };
 
-        const res = await fetch(getApiUrl('/api/drop'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        let data;
-        try {
-          data = await res.json();
-        } catch (jsonErr) {
-          throw new Error('Server returned an invalid response. Please try again.');
-        }
+        const data = await uploadDropWithProgress(payload);
 
         if (!data || !data.success) throw new Error(data?.error || 'Failed to create drop');
 
@@ -1028,6 +1099,9 @@
       } catch (err) {
         showToast(err.message || 'Failed to send drop');
       } finally {
+        if (uploadProgressContainer) {
+          uploadProgressContainer.classList.add('hidden');
+        }
         btnSendDrop.disabled = false;
         btnSendDrop.querySelector('.btn-text').textContent = 'Create Drop';
       }

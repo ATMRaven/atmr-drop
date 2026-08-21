@@ -750,6 +750,118 @@ html, body {
 }
 
 /* --------------------------------------------------------------------------
+   REAL-TIME UPLOAD PROGRESS BAR
+   -------------------------------------------------------------------------- */
+.upload-progress-container {
+  background: var(--card-glass-elevated);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: var(--radius-input);
+  padding: 12px 14px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  animation: smoothFadeIn 200ms ease-out forwards;
+}
+
+.upload-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.upload-status-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(99, 102, 241, 0.3);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.upload-status-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.upload-percent-badge {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.upload-progress-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.upload-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4f46e5 0%, #06b6d4 100%);
+  border-radius: var(--radius-pill);
+  position: relative;
+  transition: width 120ms ease-out;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.5);
+}
+
+.progress-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.4) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.upload-progress-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+}
+
+.upload-stat-left {
+  color: var(--text-secondary);
+}
+
+.upload-stat-right {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
    PREMIUM BUTTONS
    -------------------------------------------------------------------------- */
 .action-footer {

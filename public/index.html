@@ -146,6 +146,26 @@
           </div>
         </div>
 
+        <!-- Real-Time Upload Progress Widget -->
+        <div id="upload-progress-container" class="upload-progress-container hidden">
+          <div class="upload-progress-header">
+            <div class="upload-status-title-wrap">
+              <div class="upload-spinner"></div>
+              <span id="upload-status-text" class="upload-status-text">Uploading files...</span>
+            </div>
+            <span id="upload-percent-badge" class="upload-percent-badge">0%</span>
+          </div>
+          <div class="upload-progress-track">
+            <div id="upload-progress-bar" class="upload-progress-bar" style="width: 0%;">
+              <div class="progress-shimmer"></div>
+            </div>
+          </div>
+          <div class="upload-progress-stats">
+            <span id="upload-bytes-text" class="upload-stat-left">0 KB / 0 KB</span>
+            <span id="upload-speed-text" class="upload-stat-right">0 KB/s</span>
+          </div>
+        </div>
+
         <!-- Primary Action -->
         <div class="action-footer">
           <button id="btn-send-drop" class="btn-primary full-width">
