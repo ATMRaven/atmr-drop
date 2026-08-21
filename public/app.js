@@ -242,6 +242,10 @@
   }
 
   function getApiUrl(path) {
+    if (!path) return PROD_API_ORIGIN;
+    if (typeof path === 'string' && (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:') || path.startsWith('data:'))) {
+      return path;
+    }
     const cleanPath = path.startsWith('/') ? path : '/' + path;
     if (isCapacitorNative() || (window.location.hostname === 'localhost' && window.location.port === '')) {
       return `${PROD_API_ORIGIN}${cleanPath}`;
