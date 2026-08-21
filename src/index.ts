@@ -106,7 +106,7 @@ export default {
       } catch (e) {}
 
       return jsonResponse({
-        version: '1.0.18',
+        version: '1.0.20',
         downloadUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
         releasePage: 'https://github.com/ATMRaven/atmr-drop/releases/latest',
         mandatory: false,
