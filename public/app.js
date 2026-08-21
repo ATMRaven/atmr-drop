@@ -58,6 +58,10 @@
 
   // Send elements
   const inputText = document.getElementById('input-text');
+  const liveInputBar = document.getElementById('live-input-bar');
+  const liveTagBadge = document.getElementById('live-tag-badge');
+  const liveTagDesc = document.getElementById('live-tag-desc');
+  const liveStats = document.getElementById('live-stats');
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('file-input');
   const stagedChipsList = document.getElementById('staged-files-list');
@@ -69,6 +73,19 @@
   // Share elements
   const btnCopyPin = document.getElementById('btn-copy-pin');
   const sharePinCode = document.getElementById('share-pin-code');
+  const shareDropInfo = document.getElementById('share-drop-info');
+  const sharePayloadBadge = document.getElementById('share-payload-badge');
+  const shareBadgeIcon = document.getElementById('share-badge-icon');
+  const shareBadgeText = document.getElementById('share-badge-text');
+  const sharePayloadStat = document.getElementById('share-payload-stat');
+  const shareLinkBox = document.getElementById('share-link-box');
+  const shareLinkDomain = document.getElementById('share-link-domain');
+  const shareLinkUrl = document.getElementById('share-link-url');
+  const shareLinkOpenBtn = document.getElementById('share-link-open-btn');
+  const shareTextBox = document.getElementById('share-text-box');
+  const shareTextSnippet = document.getElementById('share-text-snippet');
+  const shareFilesBox = document.getElementById('share-files-box');
+  const shareFilesChips = document.getElementById('share-files-chips');
   const shareQrCanvas = document.getElementById('share-qrcode-canvas');
   const shareDirectUrl = document.getElementById('share-direct-url');
   const btnCopyUrl = document.getElementById('btn-copy-url');
@@ -80,7 +97,15 @@
   // Vault / Receive elements
   const receiveExpiryText = document.getElementById('receive-expiry-text');
   const receiveBurnNotice = document.getElementById('receive-burn-notice');
+  const receivedLinkHero = document.getElementById('received-link-hero');
+  const vaultLinkDomain = document.getElementById('vault-link-domain');
+  const vaultLinkUrl = document.getElementById('vault-link-url');
+  const vaultLinkOpenBtn = document.getElementById('vault-link-open-btn');
+  const vaultLinkCopyBtn = document.getElementById('vault-link-copy-btn');
   const receivedTextContainer = document.getElementById('received-text-container');
+  const receivedTextLabel = document.getElementById('received-text-label');
+  const receivedTextBadge = document.getElementById('received-text-badge');
+  const btnOpenReceivedLink = document.getElementById('btn-open-received-link');
   const receivedTextContent = document.getElementById('received-text-content');
   const btnCopyReceivedText = document.getElementById('btn-copy-received-text');
   const receivedImagesContainer = document.getElementById('received-images-container');
@@ -133,6 +158,136 @@
   const btnUpdateNow = document.getElementById('btn-update-now');
   const btnUpdateLater = document.getElementById('btn-update-later');
 
+  // --- CONTENT ANALYSIS & URL HELPERS ---
+  function extractUrls(text) {
+    if (!text || typeof text !== 'string') return [];
+    const urlRegex = /(https?:\/\/[^\s<>"'`()]+|www\.[^\s<>"'`()]+|[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(?:\/[^\s<>"'`()]*)?)/gi;
+    const matches = text.match(urlRegex) || [];
+    const results = [];
+    const seen = new Set();
+
+    for (const m of matches) {
+      let raw = m.replace(/[.,;!?)]+$/, '');
+      if (raw.length < 4 || seen.has(raw)) continue;
+      seen.add(raw);
+
+      let href = raw;
+      if (!/^https?:\/\//i.test(href)) {
+        href = 'https://' + href;
+      }
+
+      let domain = '';
+      try {
+        const u = new URL(href);
+        domain = u.hostname.replace(/^www\./i, '');
+      } catch (e) {
+        domain = raw.split('/')[0].replace(/^www\./i, '');
+      }
+
+      results.push({ raw, href, domain });
+    }
+    return results;
+  }
+
+  function isPureUrl(text) {
+    if (!text) return false;
+    const trimmed = text.trim();
+    const urls = extractUrls(trimmed);
+    if (urls.length === 1) {
+      const remainder = trimmed.replace(urls[0].raw, '').trim();
+      return remainder.length === 0;
+    }
+    return false;
+  }
+
+  function isCodeSnippet(text) {
+    if (!text) return false;
+    const trimmed = text.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try { JSON.parse(trimmed); return true; } catch (e) {}
+    }
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try { JSON.parse(trimmed); return true; } catch (e) {}
+    }
+    const codePatterns = [
+      /^(import|export|const|let|var|function|class|def|from|public|private|if|for|while)\b/m,
+      /[{};()=>]{3,}/,
+      /<(!DOCTYPE|html|div|span|p|script|style|link|body)[^>]*>/i,
+      /\b(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP)\s+.*\s+(FROM|INTO|TABLE|WHERE)\b/i,
+      /^(npm|git|curl|docker|cd|ls|mkdir|chmod|sudo)\s+/m
+    ];
+    return codePatterns.some(p => p.test(trimmed));
+  }
+
+  function analyzePayload(text, files) {
+    const hasText = Boolean(text && text.trim());
+    const hasFiles = Boolean(files && files.length > 0);
+    const urls = hasText ? extractUrls(text.trim()) : [];
+    const isPureLink = hasText && isPureUrl(text);
+    const isCode = hasText && !isPureLink && isCodeSnippet(text);
+
+    let primaryType = 'note';
+    let icon = '📝';
+    let typeLabel = 'Text Note';
+
+    if (isPureLink) {
+      primaryType = 'link';
+      icon = '🔗';
+      typeLabel = 'Web Link';
+    } else if (isCode) {
+      primaryType = 'code';
+      icon = '💻';
+      typeLabel = 'Code Snippet';
+    } else if (hasFiles && !hasText) {
+      const isAllImages = files.every(f => f.type && f.type.startsWith('image/'));
+      if (isAllImages) {
+        primaryType = 'photos';
+        icon = '🖼️';
+        typeLabel = files.length === 1 ? '1 Photo' : `${files.length} Photos`;
+      } else {
+        primaryType = 'files';
+        icon = '📁';
+        typeLabel = files.length === 1 ? '1 File' : `${files.length} Files`;
+      }
+    } else if (hasFiles && hasText) {
+      primaryType = 'mixed';
+      icon = '📦';
+      typeLabel = 'Drop Package';
+    }
+
+    return {
+      hasText,
+      hasFiles,
+      urls,
+      isPureLink,
+      isCode,
+      primaryType,
+      icon,
+      typeLabel,
+      textLength: text ? text.length : 0,
+      wordCount: text ? text.trim().split(/\s+/).filter(Boolean).length : 0,
+      lineCount: text ? text.split(/\r\n|\r|\n/).length : 0,
+      filesCount: files ? files.length : 0,
+      totalFileSize: files ? files.reduce((acc, f) => acc + (f.size || 0), 0) : 0
+    };
+  }
+
+  function formatAutolinkHtml(text) {
+    if (!text) return '';
+    const urls = extractUrls(text);
+    if (urls.length === 0) {
+      return escapeHtml(text);
+    }
+
+    let escaped = escapeHtml(text);
+    for (const u of urls) {
+      const escapedRaw = escapeHtml(u.raw);
+      const linkHtml = `<a href="${escapeHtml(u.href)}" target="_blank" rel="noopener noreferrer" class="vault-inline-link" title="Open in browser">${escapedRaw} <span class="ext-arrow">↗</span></a>`;
+      escaped = escaped.split(escapedRaw).join(linkHtml);
+    }
+    return escaped;
+  }
+
   // --- INITIALIZATION ---
   function init() {
     setupTabs();
@@ -140,6 +295,7 @@
     setupDropzone();
     setupCamera();
     setupActions();
+    setupLiveInputWatcher();
     setupUpdateModal();
     setupMobileAppBanner();
     setupServiceWorker();
@@ -193,7 +349,6 @@
     const btnAction = banner?.querySelector('.btn-banner-download');
     if (!banner) return;
 
-    // Never show promo banner inside the native installed app or installed standalone PWA
     if (isCapacitorNative() || isStandalonePwa()) {
       banner.classList.add('hidden');
       return;
@@ -231,20 +386,17 @@
 
   // --- IN-APP UPDATE CHECKER (NATIVE MOBILE ONLY) ---
   async function checkAppUpdate() {
-    // CRITICAL: Web app visitors are already running the latest web code; only prompt APK updates in native app
     if (!isCapacitorNative()) {
       return;
     }
 
     try {
-      // Check Worker version API first
       let data = null;
       try {
         const res = await fetch(getApiUrl('/api/version'));
         if (res.ok) data = await res.json();
       } catch (e) {}
 
-      // Fallback to GitHub Releases API if backend endpoint is unavailable
       if (!data || !data.version) {
         const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest');
         if (ghRes.ok) {
@@ -404,6 +556,39 @@
     return pinCells.map(c => c.value).join('');
   }
 
+  // --- LIVE INPUT WATCHER ---
+  function updateLiveInputInfo() {
+    if (!liveInputBar) return;
+    const text = inputText.value;
+    if (!text || !text.trim()) {
+      liveInputBar.classList.add('hidden');
+      return;
+    }
+
+    liveInputBar.classList.remove('hidden');
+    const info = analyzePayload(text, stagedFiles);
+
+    liveTagBadge.className = `live-tag-badge ${info.primaryType}`;
+    liveTagBadge.textContent = `${info.icon} ${info.typeLabel}`;
+
+    if (info.isPureLink && info.urls.length > 0) {
+      liveTagDesc.textContent = info.urls[0].domain;
+      liveTagDesc.classList.remove('hidden');
+    } else if (info.urls.length > 0) {
+      liveTagDesc.textContent = `${info.urls.length} link${info.urls.length > 1 ? 's' : ''}`;
+      liveTagDesc.classList.remove('hidden');
+    } else {
+      liveTagDesc.classList.add('hidden');
+    }
+
+    liveStats.textContent = `${info.wordCount} words • ${info.textLength} chars`;
+  }
+
+  function setupLiveInputWatcher() {
+    inputText.addEventListener('input', updateLiveInputInfo);
+    inputText.addEventListener('paste', () => setTimeout(updateLiveInputInfo, 30));
+  }
+
   // --- DROPZONE & FILES ---
   function setupDropzone() {
     dropzone.addEventListener('click', (e) => {
@@ -454,6 +639,7 @@
       });
     }
     renderStagedFiles();
+    updateLiveInputInfo();
   }
 
   function readFileAsBase64(file) {
@@ -490,6 +676,7 @@
         const idx = parseInt(e.target.dataset.idx, 10);
         stagedFiles.splice(idx, 1);
         renderStagedFiles();
+        updateLiveInputInfo();
       });
     });
   }
@@ -528,6 +715,7 @@
       });
 
       renderStagedFiles();
+      updateLiveInputInfo();
       closeCamera();
       showToast('Photo captured');
     });
@@ -576,8 +764,14 @@
 
         if (!data || !data.success) throw new Error(data?.error || 'Failed to create drop');
 
-        activeDropData = data;
-        displayShareScreen(data);
+        // Store active drop data including sent content
+        activeDropData = {
+          ...data,
+          text: text || data.text,
+          files: data.files || stagedFiles
+        };
+
+        displayShareScreen(activeDropData);
         playChime('success');
         showToast('Drop created!');
       } catch (err) {
@@ -654,6 +848,46 @@
 
     renderQr(directUrl);
 
+    // Render Payload Overview / Summary
+    const text = data.text || '';
+    const files = data.files || [];
+    const info = analyzePayload(text, files);
+
+    sharePayloadBadge.className = `payload-badge ${info.primaryType}`;
+    shareBadgeIcon.textContent = info.icon;
+    shareBadgeText.textContent = info.typeLabel;
+
+    if (info.isPureLink && info.urls.length > 0) {
+      sharePayloadStat.textContent = '1 URL';
+      shareLinkBox.classList.remove('hidden');
+      shareTextBox.classList.add('hidden');
+      shareLinkDomain.textContent = info.urls[0].domain;
+      shareLinkUrl.textContent = info.urls[0].href;
+      shareLinkOpenBtn.href = info.urls[0].href;
+    } else if (info.hasText) {
+      sharePayloadStat.textContent = `${info.wordCount} words`;
+      shareLinkBox.classList.add('hidden');
+      shareTextBox.classList.remove('hidden');
+      shareTextSnippet.textContent = text.length > 220 ? text.slice(0, 220) + '…' : text;
+    } else {
+      sharePayloadStat.textContent = `${info.filesCount} file${info.filesCount > 1 ? 's' : ''}`;
+      shareLinkBox.classList.add('hidden');
+      shareTextBox.classList.add('hidden');
+    }
+
+    if (files.length > 0) {
+      shareFilesBox.classList.remove('hidden');
+      shareFilesChips.innerHTML = '';
+      files.forEach(f => {
+        const chip = document.createElement('span');
+        chip.className = 'file-chip';
+        chip.innerHTML = `<span class="chip-name">${escapeHtml(f.name)}</span> <span class="chip-size">${formatFileSize(f.size)}</span>`;
+        shareFilesChips.appendChild(chip);
+      });
+    } else {
+      shareFilesBox.classList.add('hidden');
+    }
+
     if (data.burnAfterRead) {
       shareBurnBadge.classList.remove('hidden');
     } else {
@@ -715,15 +949,45 @@
       receiveBurnNotice.classList.add('hidden');
     }
 
-    // Text
-    if (drop.text) {
+    const text = drop.text || '';
+    const files = drop.files || [];
+    const info = analyzePayload(text, files);
+
+    // Direct Link Hero vs Text Note
+    if (info.isPureLink && info.urls.length > 0) {
+      const u = info.urls[0];
+      receivedLinkHero.classList.remove('hidden');
+      receivedTextContainer.classList.add('hidden');
+
+      vaultLinkDomain.textContent = u.domain;
+      vaultLinkUrl.textContent = u.href;
+      vaultLinkOpenBtn.href = u.href;
+
+      vaultLinkCopyBtn.onclick = () => {
+        navigator.clipboard.writeText(u.href);
+        playChime('copy');
+        showToast('Link copied to clipboard');
+      };
+    } else if (info.hasText) {
+      receivedLinkHero.classList.add('hidden');
       receivedTextContainer.classList.remove('hidden');
-      receivedTextContent.textContent = drop.text;
+
+      if (info.urls.length > 0) {
+        btnOpenReceivedLink.classList.remove('hidden');
+        btnOpenReceivedLink.href = info.urls[0].href;
+        receivedTextBadge.classList.remove('hidden');
+        receivedTextBadge.textContent = `🔗 ${info.urls.length} Link${info.urls.length > 1 ? 's' : ''}`;
+        receivedTextContent.innerHTML = formatAutolinkHtml(text);
+      } else {
+        btnOpenReceivedLink.classList.add('hidden');
+        receivedTextBadge.classList.add('hidden');
+        receivedTextContent.textContent = text;
+      }
     } else {
+      receivedLinkHero.classList.add('hidden');
       receivedTextContainer.classList.add('hidden');
     }
 
-    const files = drop.files || [];
     const images = files.filter(f => f.type && f.type.startsWith('image/'));
     const nonImages = files.filter(f => !f.type || !f.type.startsWith('image/'));
 
@@ -905,6 +1169,7 @@
   // --- HELPERS ---
   function resetForm() {
     inputText.value = '';
+    if (liveInputBar) liveInputBar.classList.add('hidden');
     stagedFiles = [];
     renderStagedFiles();
     fileInput.value = '';

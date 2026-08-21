@@ -251,6 +251,8 @@ async function handleCreateDrop(request: Request, env: Env): Promise<Response> {
       burnAfterRead,
       itemCount: (metadata.text ? 1 : 0) + fileEntries.length,
       fileCount: fileEntries.length,
+      text: metadata.text,
+      files: fileEntries,
     });
   } catch (err: any) {
     return jsonResponse({ error: 'Failed to create drop', details: err?.message || String(err) }, 500);

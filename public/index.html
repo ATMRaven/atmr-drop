@@ -78,6 +78,14 @@
         <!-- Textarea -->
         <div class="form-group">
           <textarea id="input-text" class="clean-textarea" placeholder="Paste text, links, code, or notes..." rows="3"></textarea>
+          <!-- Live Content Detection Bar -->
+          <div id="live-input-bar" class="live-input-bar hidden">
+            <div class="live-tag" id="live-tag">
+              <span class="live-tag-badge" id="live-tag-badge">🔗 Link</span>
+              <span class="live-tag-desc" id="live-tag-desc">github.com</span>
+            </div>
+            <div class="live-stats" id="live-stats">0 chars</div>
+          </div>
         </div>
 
         <!-- File Upload Dropzone -->
@@ -173,6 +181,41 @@
           <span class="pin-hint">Click to copy</span>
         </div>
 
+        <!-- Drop Payload Information / Overview Widget -->
+        <div id="share-drop-info" class="share-payload-card">
+          <div class="payload-card-header">
+            <div class="payload-badge" id="share-payload-badge">
+              <span class="payload-badge-icon" id="share-badge-icon">🔗</span>
+              <span class="payload-badge-text" id="share-badge-text">Web Link</span>
+            </div>
+            <span class="payload-stat-pill" id="share-payload-stat">1 URL</span>
+          </div>
+
+          <!-- Link Specific Box -->
+          <div id="share-link-box" class="share-link-box hidden">
+            <div class="share-link-icon-wrap">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+            </div>
+            <div class="share-link-details">
+              <span class="share-link-domain" id="share-link-domain">github.com</span>
+              <span class="share-link-full" id="share-link-url">https://github.com/...</span>
+            </div>
+            <a id="share-link-open-btn" class="btn-ghost sm btn-open-link" href="#" target="_blank" rel="noopener noreferrer" title="Open in new browser tab">
+              Open ↗
+            </a>
+          </div>
+
+          <!-- Text Preview Box -->
+          <div id="share-text-box" class="share-text-box hidden">
+            <div class="share-text-snippet" id="share-text-snippet"></div>
+          </div>
+
+          <!-- Attached Files / Photos Breakdown -->
+          <div id="share-files-box" class="share-files-box hidden">
+            <div class="share-files-chips" id="share-files-chips"></div>
+          </div>
+        </div>
+
         <!-- QR Code & Link -->
         <div class="share-qr-wrapper">
           <div id="share-qrcode-canvas" class="clean-qr-box"></div>
@@ -210,11 +253,40 @@
           🔥 This drop has self-destructed on the server.
         </div>
 
-        <!-- Decrypted Text -->
+        <!-- Direct Link Hero Card (for standalone URL drops) -->
+        <div id="received-link-hero" class="vault-link-hero hidden">
+          <div class="vault-link-hero-top">
+            <div class="vault-link-hero-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            </div>
+            <div class="vault-link-hero-meta">
+              <div class="vault-link-domain-badge" id="vault-link-domain">github.com</div>
+              <div class="vault-link-url" id="vault-link-url">https://github.com/...</div>
+            </div>
+          </div>
+          <div class="vault-link-hero-actions">
+            <a id="vault-link-open-btn" class="btn-primary full-width btn-open-main-link" href="#" target="_blank" rel="noopener noreferrer">
+              <span>Open in Browser ↗</span>
+            </a>
+            <button type="button" id="vault-link-copy-btn" class="btn-secondary full-width">
+              <span>Copy Link</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Decrypted Text / Message Note -->
         <div id="received-text-container" class="vault-block hidden">
           <div class="block-top">
-            <span class="block-label">Text Note</span>
-            <button id="btn-copy-received-text" class="btn-ghost sm">Copy</button>
+            <div class="block-label-group">
+              <span class="block-label" id="received-text-label">Text Note</span>
+              <span class="block-sub-badge hidden" id="received-text-badge">🔗 Contains Links</span>
+            </div>
+            <div class="block-actions">
+              <a id="btn-open-received-link" class="btn-primary sm btn-link-action hidden" href="#" target="_blank" rel="noopener noreferrer">
+                Open Link ↗
+              </a>
+              <button id="btn-copy-received-text" class="btn-ghost sm">Copy</button>
+            </div>
           </div>
           <div id="received-text-content" class="text-preview-box"></div>
         </div>
