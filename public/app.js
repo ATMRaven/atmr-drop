@@ -5,35 +5,82 @@
   let stagedFiles = [];
   let activeDropData = null;
   let countdownTimer = null;
+  let bannerTimer = null;
+  let isExplicitNewSend = false;
+  const SENDER_STORAGE_KEY = 'atmr_active_sender_drop';
 
-  // --- SOUND SYNTHESIS (Flagship Audio Feedback) ---
+  // --- SOUND SYSTEM (ElevenLabs High-Fidelity Audio + Harmonic Web Audio Fallback) ---
   const audioCtx = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) ? new (window.AudioContext || window.webkitAudioContext)() : null;
+  const soundSuccess = new Audio('sounds/drop_success.mp3');
+  const soundPop = new Audio('sounds/drop_pop.mp3');
+  soundSuccess.preload = 'auto';
+  soundPop.preload = 'auto';
 
   function playChime(type) {
+    try {
+      const audio = (type === 'success') ? soundSuccess : soundPop;
+      if (audio) {
+        audio.currentTime = 0;
+        audio.volume = 0.85;
+        const playPromise = audio.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => playSyntheticChime(type));
+        }
+        return;
+      }
+    } catch (e) {}
+    playSyntheticChime(type);
+  }
+
+  function playSyntheticChime(type) {
     if (!audioCtx) return;
     try {
       if (audioCtx.state === 'suspended') audioCtx.resume();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-
       const now = audioCtx.currentTime;
       if (type === 'success') {
+        // Dual-tone harmonic resonant waterdrop chime
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(2600, now);
+        filter.frequency.exponentialRampToValueAtTime(700, now + 0.38);
+
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, now); // D5
+        osc1.frequency.exponentialRampToValueAtTime(880, now + 0.08); // A5
+
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(1174.66, now); // D6
+        osc2.frequency.exponentialRampToValueAtTime(1760, now + 0.08);
+
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(filter);
+        filter.connect(audioCtx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 0.38);
+        osc2.stop(now + 0.38);
+      } else {
+        // Subtle haptic pop
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(523.25, now); // C5
-        osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.08); // E5
+        osc.frequency.setValueAtTime(1100, now);
+        osc.frequency.exponentialRampToValueAtTime(320, now + 0.05);
         gain.gain.setValueAtTime(0.08, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
         osc.start(now);
-        osc.stop(now + 0.35);
-      } else if (type === 'copy') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(880, now);
-        gain.gain.setValueAtTime(0.05, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
-        osc.start(now);
-        osc.stop(now + 0.15);
+        osc.stop(now + 0.05);
       }
     } catch (e) {}
   }
@@ -46,6 +93,13 @@
   const viewReceive = document.getElementById('view-receive');
   const viewShare = document.getElementById('view-share');
   const viewVault = document.getElementById('view-vault');
+
+  // Active Drop Banner
+  const activeDropBanner = document.getElementById('active-drop-banner');
+  const activeBannerPin = document.getElementById('active-banner-pin');
+  const activeBannerTime = document.getElementById('active-banner-time');
+  const btnBannerView = document.getElementById('btn-banner-view');
+  const btnBannerDismiss = document.getElementById('btn-banner-dismiss');
 
   // PIN inputs
   const pinCells = [
@@ -127,7 +181,7 @@
 
   // --- APP VERSION, ENVIRONMENT & API RESOLUTION ---
   const PROD_API_ORIGIN = 'https://drop.atmr.workers.dev';
-  const APP_CURRENT_VERSION = (window.APP_VERSION || '1.0.12').replace(/^v/, '').trim();
+  const APP_CURRENT_VERSION = (window.APP_VERSION || '1.0.13').replace(/^v/, '').trim();
   let isUpdateMandatory = false;
 
   function isCapacitorNative() {
@@ -152,6 +206,72 @@
       return `${PROD_API_ORIGIN}${cleanPath}`;
     }
     return cleanPath;
+  }
+
+  // --- ACTIVE DROP SENDER STORAGE & RECOVERY ---
+  function getActiveSenderDrop() {
+    try {
+      const raw = localStorage.getItem(SENDER_STORAGE_KEY);
+      if (!raw) return null;
+      const drop = JSON.parse(raw);
+      if (drop && drop.code && drop.expiresAt && Number(drop.expiresAt) > Date.now()) {
+        return drop;
+      }
+      clearActiveSenderDrop();
+    } catch (e) {}
+    return null;
+  }
+
+  function saveActiveSenderDrop(drop) {
+    try {
+      localStorage.setItem(SENDER_STORAGE_KEY, JSON.stringify(drop));
+    } catch (e) {}
+    activeDropData = drop;
+    updateActiveDropBanner();
+  }
+
+  function clearActiveSenderDrop() {
+    try {
+      localStorage.removeItem(SENDER_STORAGE_KEY);
+    } catch (e) {}
+    activeDropData = null;
+    updateActiveDropBanner();
+  }
+
+  function updateActiveDropBanner() {
+    if (!activeDropBanner) return;
+    const active = getActiveSenderDrop();
+    if (active) {
+      activeDropBanner.classList.remove('hidden');
+      if (activeBannerPin) activeBannerPin.textContent = active.code;
+      if (activeBannerTime) {
+        const leftSec = Math.max(0, Math.floor((Number(active.expiresAt) - Date.now()) / 1000));
+        const m = Math.floor(leftSec / 60);
+        const s = leftSec % 60;
+        activeBannerTime.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} left`;
+      }
+      if (!bannerTimer) {
+        bannerTimer = setInterval(() => {
+          const cur = getActiveSenderDrop();
+          if (!cur) {
+            clearInterval(bannerTimer);
+            bannerTimer = null;
+            activeDropBanner.classList.add('hidden');
+          } else if (activeBannerTime) {
+            const leftSec = Math.max(0, Math.floor((Number(cur.expiresAt) - Date.now()) / 1000));
+            const m = Math.floor(leftSec / 60);
+            const s = leftSec % 60;
+            activeBannerTime.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} left`;
+          }
+        }, 1000);
+      }
+    } else {
+      activeDropBanner.classList.add('hidden');
+      if (bannerTimer) {
+        clearInterval(bannerTimer);
+        bannerTimer = null;
+      }
+    }
   }
 
   const updateModal = document.getElementById('update-modal');
@@ -518,14 +638,25 @@
     if (mode === 'send') {
       tabSend.classList.add('active');
       tabReceive.classList.remove('active');
-      viewSend.classList.add('active');
-      inputText.focus();
+
+      const active = getActiveSenderDrop();
+      if (active && !isExplicitNewSend) {
+        // User has an active unexpired drop -> restore active share view!
+        activeDropData = active;
+        displayShareScreen(active);
+      } else {
+        viewSend.classList.add('active');
+        updateActiveDropBanner();
+        inputText.focus();
+      }
     } else if (mode === 'receive') {
       tabReceive.classList.add('active');
       tabSend.classList.remove('active');
       viewReceive.classList.add('active');
       pinCells[0].focus();
     } else if (mode === 'share') {
+      tabSend.classList.add('active');
+      tabReceive.classList.remove('active');
       viewShare.classList.add('active');
     } else if (mode === 'vault') {
       viewVault.classList.add('active');
@@ -598,122 +729,124 @@
 
   // --- LIVE INPUT WATCHER ---
   function updateLiveInputInfo() {
-    if (!liveInputBar) return;
     const text = inputText.value;
-    if (!text || !text.trim()) {
+    const info = analyzePayload(text, stagedFiles);
+
+    if (!info.hasText && stagedFiles.length === 0) {
       liveInputBar.classList.add('hidden');
       return;
     }
 
     liveInputBar.classList.remove('hidden');
-    const info = analyzePayload(text, stagedFiles);
-
     liveTagBadge.className = `live-tag-badge ${info.primaryType}`;
     liveTagBadge.textContent = `${info.icon} ${info.typeLabel}`;
 
     if (info.isPureLink && info.urls.length > 0) {
       liveTagDesc.textContent = info.urls[0].domain;
       liveTagDesc.classList.remove('hidden');
-    } else if (info.urls.length > 0) {
-      liveTagDesc.textContent = `${info.urls.length} link${info.urls.length > 1 ? 's' : ''}`;
+    } else if (info.hasCode) {
+      liveTagDesc.textContent = 'Code Snippet';
       liveTagDesc.classList.remove('hidden');
     } else {
       liveTagDesc.classList.add('hidden');
     }
 
-    liveStats.textContent = `${info.wordCount} words • ${info.textLength} chars`;
+    const statParts = [];
+    if (info.wordCount > 0) statParts.push(`${info.wordCount} words`);
+    if (info.charCount > 0) statParts.push(`${info.charCount} chars`);
+    if (stagedFiles.length > 0) statParts.push(`${stagedFiles.length} file${stagedFiles.length > 1 ? 's' : ''}`);
+    liveStats.textContent = statParts.join(' • ');
   }
 
   function setupLiveInputWatcher() {
     inputText.addEventListener('input', updateLiveInputInfo);
-    inputText.addEventListener('paste', () => setTimeout(updateLiveInputInfo, 30));
+    inputText.addEventListener('paste', () => {
+      setTimeout(updateLiveInputInfo, 50);
+    });
   }
 
-  // --- DROPZONE & FILES ---
+  // --- DROPZONE & CAMERA ---
   function setupDropzone() {
-    dropzone.addEventListener('click', (e) => {
-      if (e.target !== btnCamera && !btnCamera.contains(e.target)) {
-        fileInput.click();
-      }
-    });
-
-    fileInput.addEventListener('change', () => {
-      handleFiles(fileInput.files);
-    });
-
-    ['dragenter', 'dragover'].forEach(name => {
-      dropzone.addEventListener(name, (e) => {
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
         e.preventDefault();
-        e.stopPropagation();
         dropzone.classList.add('dragover');
       });
     });
 
-    ['dragleave', 'drop'].forEach(name => {
-      dropzone.addEventListener(name, (e) => {
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
         e.preventDefault();
-        e.stopPropagation();
         dropzone.classList.remove('dragover');
       });
     });
 
     dropzone.addEventListener('drop', (e) => {
-      const dt = e.dataTransfer;
-      if (dt && dt.files && dt.files.length) {
-        handleFiles(dt.files);
-      }
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length) handleFiles(files);
+    });
+
+    dropzone.addEventListener('click', (e) => {
+      if (e.target.closest('#btn-camera')) return;
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length) handleFiles(files);
     });
   }
 
-  async function handleFiles(files) {
-    for (const file of Array.from(files)) {
-      if (stagedFiles.some(f => f.name === file.name && f.size === file.size)) continue;
-
-      const base64 = await readFileAsBase64(file);
-      stagedFiles.push({
-        id: 'f_' + Math.random().toString(36).substring(2, 9),
-        name: file.name,
-        type: file.type || 'application/octet-stream',
-        size: file.size,
-        dataBase64: base64
-      });
+  function handleFiles(files) {
+    const totalSize = stagedFiles.reduce((acc, f) => acc + f.size, 0) + files.reduce((acc, f) => acc + f.size, 0);
+    if (totalSize > 5000 * 1024 * 1024) {
+      showToast('Combined files exceed 5 GB maximum limit.');
+      return;
     }
-    renderStagedFiles();
-    updateLiveInputInfo();
-  }
 
-  function readFileAsBase64(file) {
-    return new Promise((resolve, reject) => {
+    files.forEach(file => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
+      reader.onload = (e) => {
+        const base64 = e.target.result.split(',')[1];
+        stagedFiles.push({
+          id: 'f_' + Math.random().toString(36).substring(2, 9),
+          name: file.name,
+          type: file.type || 'application/octet-stream',
+          size: file.size,
+          dataBase64: base64
+        });
+        renderStagedFiles();
+        updateLiveInputInfo();
+      };
       reader.readAsDataURL(file);
     });
+    playChime('pop');
   }
 
   function renderStagedFiles() {
-    stagedChipsList.innerHTML = '';
     if (stagedFiles.length === 0) {
       stagedChipsList.classList.add('hidden');
+      stagedChipsList.innerHTML = '';
       return;
     }
 
     stagedChipsList.classList.remove('hidden');
+    stagedChipsList.innerHTML = '';
 
-    stagedFiles.forEach((file, idx) => {
+    stagedFiles.forEach((file, index) => {
       const chip = document.createElement('div');
-      chip.className = 'file-chip';
+      chip.className = 'staged-chip';
       chip.innerHTML = `
         <span class="chip-name">${escapeHtml(file.name)}</span>
         <span class="chip-size">${formatFileSize(file.size)}</span>
-        <button type="button" class="chip-remove" data-idx="${idx}">&times;</button>
+        <button type="button" class="chip-remove" data-index="${index}">&times;</button>
       `;
       stagedChipsList.appendChild(chip);
     });
 
-    document.querySelectorAll('.chip-remove').forEach(btn => {
+    stagedChipsList.querySelectorAll('.chip-remove').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const idx = parseInt(e.target.dataset.idx, 10);
+        const idx = parseInt(e.target.dataset.index, 10);
         stagedFiles.splice(idx, 1);
         renderStagedFiles();
         updateLiveInputInfo();
@@ -721,7 +854,6 @@
     });
   }
 
-  // --- CAMERA ---
   function setupCamera() {
     btnCamera.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -730,7 +862,7 @@
         cameraVideo.srcObject = mediaStream;
         cameraModal.classList.add('active');
       } catch (err) {
-        showToast('Camera unavailable');
+        showToast('Camera access denied or unavailable.');
       }
     });
 
@@ -741,9 +873,9 @@
       cameraCanvas.width = cameraVideo.videoWidth || 640;
       cameraCanvas.height = cameraVideo.videoHeight || 480;
       const ctx = cameraCanvas.getContext('2d');
-      ctx.drawImage(cameraVideo, 0, 0);
-
-      const base64 = cameraCanvas.toDataURL('image/jpeg', 0.85);
+      ctx.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
+      const dataUrl = cameraCanvas.toDataURL('image/jpeg', 0.85);
+      const base64 = dataUrl.split(',')[1];
       const filename = `photo_${Date.now()}.jpg`;
 
       stagedFiles.push({
@@ -757,6 +889,7 @@
       renderStagedFiles();
       updateLiveInputInfo();
       closeCamera();
+      playChime('pop');
       showToast('Photo captured');
     });
   }
@@ -771,6 +904,22 @@
 
   // --- SEND & SHARE ACTIONS ---
   function setupActions() {
+    if (btnBannerView) {
+      btnBannerView.addEventListener('click', () => {
+        const active = getActiveSenderDrop();
+        if (active) {
+          activeDropData = active;
+          displayShareScreen(active);
+        }
+      });
+    }
+
+    if (btnBannerDismiss) {
+      btnBannerDismiss.addEventListener('click', () => {
+        if (activeDropBanner) activeDropBanner.classList.add('hidden');
+      });
+    }
+
     btnSendDrop.addEventListener('click', async () => {
       const text = inputText.value.trim();
       if (!text && stagedFiles.length === 0) {
@@ -782,10 +931,11 @@
       btnSendDrop.querySelector('.btn-text').textContent = 'Creating Drop...';
 
       try {
+        const ttlSec = parseInt(selectTtl.value, 10) || 900;
         const payload = {
           text: text || undefined,
           files: stagedFiles,
-          ttlSeconds: parseInt(selectTtl.value, 10),
+          ttlSeconds: ttlSec,
           burnAfterRead: checkBurn.checked
         };
 
@@ -804,14 +954,18 @@
 
         if (!data || !data.success) throw new Error(data?.error || 'Failed to create drop');
 
-        // Store active drop data including sent content
-        activeDropData = {
+        // Store active drop session
+        const dropSession = {
           ...data,
-          text: text || data.text,
-          files: data.files || stagedFiles
+          text: text || data.text || '',
+          files: data.files || stagedFiles || [],
+          expiresAt: data.expiresAt || (Date.now() + ttlSec * 1000),
+          ttl: ttlSec,
+          burnAfterRead: checkBurn.checked
         };
 
-        displayShareScreen(activeDropData);
+        saveActiveSenderDrop(dropSession);
+        displayShareScreen(dropSession);
         playChime('success');
         showToast('Drop created!');
       } catch (err) {
@@ -845,19 +999,24 @@
           showToast('Drop deleted');
         } catch (e) {}
       }
+      clearActiveSenderDrop();
       resetForm();
       switchTab('send');
     });
 
     btnNewSend.addEventListener('click', () => {
+      isExplicitNewSend = true;
+      clearActiveSenderDrop();
       resetForm();
       switchTab('send');
+      isExplicitNewSend = false;
     });
 
     btnCopyReceivedText.addEventListener('click', () => {
       const txt = receivedTextContent.textContent;
       if (txt) {
         navigator.clipboard.writeText(txt);
+        playChime('copy');
         showToast('Text copied');
       }
     });
@@ -1175,7 +1334,7 @@
     if (countdownTimer) clearInterval(countdownTimer);
     if (!expiresAtIso || !targetEl) return;
 
-    const expiryTime = new Date(expiresAtIso).getTime();
+    const expiryTime = typeof expiresAtIso === 'number' ? expiresAtIso : new Date(expiresAtIso).getTime();
 
     function update() {
       const now = Date.now();
@@ -1188,6 +1347,7 @@
       if (diff <= 0) {
         clearInterval(countdownTimer);
         targetEl.textContent = 'Expired';
+        clearActiveSenderDrop();
       }
     }
 
@@ -1242,6 +1402,31 @@
       toast.style.transition = 'all 150ms ease-out';
       setTimeout(() => toast.remove(), 150);
     }, 2800);
+  }
+
+  function init() {
+    setupTabs();
+    setupPinInputs();
+    setupLiveInputWatcher();
+    setupDropzone();
+    setupCamera();
+    setupActions();
+    setupUpdateModal();
+
+    // Check if user has an active unexpired drop
+    const active = getActiveSenderDrop();
+    if (active) {
+      activeDropData = active;
+      displayShareScreen(active);
+    } else {
+      updateActiveDropBanner();
+    }
+
+    checkDirectPinRoute();
+
+    if (isCapacitorNative()) {
+      checkAppUpdate(false);
+    }
   }
 
   if (document.readyState === 'loading') {

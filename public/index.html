@@ -75,6 +75,21 @@
       <!-- ================= VIEW 1: SEND ================= -->
       <section id="view-send" class="view-panel active" role="tabpanel" aria-labelledby="tab-send">
         
+        <!-- Active Drop Banner (When an unexpired drop is active) -->
+        <div id="active-drop-banner" class="active-drop-banner hidden">
+          <div class="active-banner-left">
+            <span class="active-pulse-ring"></span>
+            <div class="active-banner-info">
+              <span class="active-banner-title">Active Drop <strong>#<span id="active-banner-pin">----</span></strong></span>
+              <span id="active-banner-time" class="active-banner-time">14:59 left</span>
+            </div>
+          </div>
+          <div class="active-banner-actions">
+            <button type="button" id="btn-banner-view" class="btn-banner-view">View Drop ↗</button>
+            <button type="button" id="btn-banner-dismiss" class="btn-banner-dismiss" title="Dismiss banner">&times;</button>
+          </div>
+        </div>
+
         <!-- Textarea -->
         <div class="form-group">
           <textarea id="input-text" class="clean-textarea" placeholder="Paste text, links, code, or notes..." rows="3"></textarea>
