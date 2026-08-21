@@ -320,10 +320,18 @@
   const updateTitle = document.getElementById('update-title');
   const updateDesc = document.getElementById('update-desc');
   const updateNotesText = document.getElementById('update-notes-text');
+  const modalDownloadProgressContainer = document.getElementById('modal-download-progress-container');
+  const modalDownloadStatusText = document.getElementById('modal-download-status-text');
+  const modalDownloadPercentBadge = document.getElementById('modal-download-percent-badge');
+  const modalDownloadProgressBar = document.getElementById('modal-download-progress-bar');
+  const modalDownloadBytesText = document.getElementById('modal-download-bytes-text');
+  const modalDownloadSpeedText = document.getElementById('modal-download-speed-text');
   const btnUpdateNow = document.getElementById('btn-update-now');
   const btnUpdateLater = document.getElementById('btn-update-later');
   const btnCheckUpdate = document.getElementById('btn-check-update');
   const footerVersionVal = document.getElementById('footer-version-val');
+  let currentRemoteDownloadUrl = '';
+  let currentRemoteVersion = '';
 
   // --- CONTENT ANALYSIS & URL HELPERS ---
   function extractUrls(text) {
@@ -617,14 +625,121 @@
     return false;
   }
 
+  async function downloadUpdateInApp(downloadUrl, version) {
+    if (!downloadUrl) return;
+
+    if (btnUpdateNow) {
+      btnUpdateNow.disabled = true;
+      btnUpdateNow.textContent = 'Downloading...';
+    }
+    if (btnUpdateLater) {
+      btnUpdateLater.classList.add('hidden');
+    }
+
+    if (modalDownloadProgressContainer) {
+      modalDownloadProgressContainer.classList.remove('hidden');
+      if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = '0%';
+      if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = '0%';
+      if (modalDownloadStatusText) modalDownloadStatusText.textContent = `Downloading v${version || 'update'}...`;
+      if (modalDownloadBytesText) modalDownloadBytesText.textContent = 'Connecting...';
+      if (modalDownloadSpeedText) modalDownloadSpeedText.textContent = '0 KB/s';
+    }
+
+    const startTime = performance.now();
+    const xhr = new XMLHttpRequest();
+    xhr.responseType = 'blob';
+
+    xhr.onprogress = (event) => {
+      if (event.lengthComputable && modalDownloadProgressContainer) {
+        const percent = Math.min(99, Math.round((event.loaded / event.total) * 100));
+        if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = `${percent}%`;
+        if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = `${percent}%`;
+
+        const elapsedSec = (performance.now() - startTime) / 1000;
+        const speed = elapsedSec > 0 ? event.loaded / elapsedSec : 0;
+        if (modalDownloadBytesText) modalDownloadBytesText.textContent = `${formatFileSize(event.loaded)} / ${formatFileSize(event.total)}`;
+        if (modalDownloadSpeedText) modalDownloadSpeedText.textContent = `${formatFileSize(speed)}/s`;
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300 && xhr.response) {
+        if (modalDownloadProgressContainer) {
+          if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = '100%';
+          if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = '100%';
+          if (modalDownloadStatusText) modalDownloadStatusText.textContent = 'Ready to Install ✓';
+          if (modalDownloadSpeedText) modalDownloadSpeedText.textContent = 'Complete';
+        }
+
+        if (btnUpdateNow) {
+          btnUpdateNow.disabled = false;
+          btnUpdateNow.textContent = '✓ Install Ready';
+        }
+
+        playChime('success');
+
+        // Automatically trigger Android Package Installer or file download
+        try {
+          const blob = new Blob([xhr.response], { type: 'application/vnd.android.package-archive' });
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = `atmr-drop-v${version || 'update'}.apk`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+          showToast('Update downloaded! Opening installer...', 'success');
+        } catch (blobErr) {
+          window.open(downloadUrl, '_system');
+        }
+      } else {
+        // Fallback to browser download if CORS or error
+        if (modalDownloadProgressContainer) modalDownloadProgressContainer.classList.add('hidden');
+        if (btnUpdateNow) {
+          btnUpdateNow.disabled = false;
+          btnUpdateNow.textContent = 'Download in Browser';
+        }
+        window.open(downloadUrl, '_system');
+        showToast('Direct download opened in browser', 'info');
+      }
+    };
+
+    xhr.onerror = () => {
+      if (modalDownloadProgressContainer) modalDownloadProgressContainer.classList.add('hidden');
+      if (btnUpdateNow) {
+        btnUpdateNow.disabled = false;
+        btnUpdateNow.textContent = 'Download in Browser';
+      }
+      window.open(downloadUrl, '_system');
+      showToast('Opening update in browser...', 'info');
+    };
+
+    xhr.open('GET', downloadUrl);
+    xhr.send();
+  }
+
   function displayUpdateModal(info) {
     isUpdateMandatory = !!info.mandatory;
+    currentRemoteDownloadUrl = info.downloadUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
+    currentRemoteVersion = info.version || '';
+
     updateTitle.textContent = `Update Available (v${info.version})`;
     updateDesc.textContent = info.mandatory
       ? 'A critical update is required to continue.'
       : 'A new version of Drop is ready to install.';
     updateNotesText.textContent = info.releaseNotes || 'Bug fixes and performance enhancements.';
-    btnUpdateNow.href = info.downloadUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
+
+    if (modalDownloadProgressContainer) {
+      modalDownloadProgressContainer.classList.add('hidden');
+      if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = '0%';
+      if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = '0%';
+    }
+
+    if (btnUpdateNow) {
+      btnUpdateNow.disabled = false;
+      btnUpdateNow.textContent = 'Update Now';
+    }
 
     if (info.mandatory) {
       btnUpdateLater.classList.add('hidden');
@@ -645,6 +760,22 @@
       btnCheckUpdate.addEventListener('click', (e) => {
         e.preventDefault();
         checkAppUpdate(true);
+      });
+    }
+
+    if (btnUpdateNow) {
+      btnUpdateNow.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (btnUpdateNow.textContent.includes('Install Ready')) {
+          // If already downloaded, re-trigger
+          if (currentRemoteDownloadUrl) {
+            window.open(currentRemoteDownloadUrl, '_system');
+          }
+          return;
+        }
+        if (currentRemoteDownloadUrl) {
+          downloadUpdateInApp(currentRemoteDownloadUrl, currentRemoteVersion);
+        }
       });
     }
 

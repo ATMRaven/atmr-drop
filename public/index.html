@@ -409,10 +409,31 @@
         <span class="update-notes-label">What's New:</span>
         <p id="update-notes-text" class="update-notes-body"></p>
       </div>
+
+      <!-- In-Modal Download Progress Bar -->
+      <div id="modal-download-progress-container" class="upload-progress-container hidden" style="margin-top: 6px; margin-bottom: 8px;">
+        <div class="upload-progress-header">
+          <div class="upload-status-title-wrap">
+            <div class="upload-spinner"></div>
+            <span id="modal-download-status-text" class="upload-status-text">Downloading update...</span>
+          </div>
+          <span id="modal-download-percent-badge" class="upload-percent-badge">0%</span>
+        </div>
+        <div class="upload-progress-track">
+          <div id="modal-download-progress-bar" class="upload-progress-bar" style="width: 0%;">
+            <div class="progress-shimmer"></div>
+          </div>
+        </div>
+        <div class="upload-progress-stats">
+          <span id="modal-download-bytes-text" class="upload-stat-left">0 MB / 0 MB</span>
+          <span id="modal-download-speed-text" class="upload-stat-right">0 KB/s</span>
+        </div>
+      </div>
+
       <div class="update-actions-stack">
-        <a id="btn-update-now" href="https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk" target="_blank" class="btn-primary full-width">
+        <button type="button" id="btn-update-now" class="btn-primary full-width">
           Update Now
-        </a>
+        </button>
         <button type="button" id="btn-update-later" class="btn-ghost full-width">
           Later
         </button>
