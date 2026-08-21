@@ -153,7 +153,7 @@ export default {
       } catch (e) {}
 
       return jsonResponse({
-        version: '1.0.21',
+        version: '1.0.23',
         downloadUrl: '/api/apk/latest',
         fallbackUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
         releasePage: 'https://github.com/ATMRaven/atmr-drop/releases/latest',

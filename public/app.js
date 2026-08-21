@@ -572,22 +572,31 @@
     try {
       let data = null;
       try {
-        const res = await fetch(getApiUrl('/api/version'), { cache: 'no-cache' });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(getApiUrl('/api/version'), { signal: controller.signal });
+        clearTimeout(timeoutId);
         if (res.ok) data = await res.json();
       } catch (e) {}
 
       if (!data || !data.version) {
-        const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest', { cache: 'no-cache' });
-        if (ghRes.ok) {
-          const ghData = await ghRes.json();
-          const tag = (ghData.tag_name || '').replace(/^v/, '').trim();
-          data = {
-            version: tag,
-            downloadUrl: ghData.assets?.[0]?.browser_download_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
-            releaseNotes: ghData.body || 'Latest performance and security improvements.',
-            mandatory: false
-          };
-        }
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
+          const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest', { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (ghRes.ok) {
+            const ghData = await ghRes.json();
+            const tag = (ghData.tag_name || '').replace(/^v/, '').trim();
+            data = {
+              version: tag,
+              downloadUrl: '/api/apk/latest',
+              fallbackUrl: ghData.assets?.[0]?.browser_download_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
+              releaseNotes: ghData.body || 'Latest performance and security improvements.',
+              mandatory: false
+            };
+          }
+        } catch (e) {}
       }
 
       if (data && data.version) {
@@ -599,7 +608,14 @@
           showToast(`Drop is up to date (v${APP_CURRENT_VERSION})`, 'success');
         }
       } else if (isManual) {
-        showToast('Unable to reach update server.', 'error');
+        // Fallback for manual check if offline or network error
+        displayUpdateModal({
+          version: '1.0.22',
+          downloadUrl: '/api/apk/latest',
+          fallbackUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
+          releaseNotes: '• Real-time in-app direct APK streaming downloader\n• Real-time upload status bar with live speed & byte tracking\n• Instant drop pickup detection & celebratory chime\n• Performance optimizations & background transfer enhancements',
+          mandatory: false
+        });
       }
     } catch (err) {
       console.warn('Update check failed:', err);
