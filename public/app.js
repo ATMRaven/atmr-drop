@@ -331,6 +331,7 @@
   const btnCheckUpdate = document.getElementById('btn-check-update');
   const footerVersionVal = document.getElementById('footer-version-val');
   let currentRemoteDownloadUrl = '';
+  let currentRemoteFallbackUrl = '';
   let currentRemoteVersion = '';
 
   // --- CONTENT ANALYSIS & URL HELPERS ---
@@ -625,8 +626,9 @@
     return false;
   }
 
-  async function downloadUpdateInApp(downloadUrl, version) {
-    if (!downloadUrl) return;
+  async function downloadUpdateInApp(downloadUrl, fallbackUrl, version) {
+    const primaryUrl = downloadUrl ? getApiUrl(downloadUrl) : getApiUrl('/api/apk/latest');
+    const secondaryUrl = fallbackUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
 
     if (btnUpdateNow) {
       btnUpdateNow.disabled = true;
@@ -663,7 +665,7 @@
     };
 
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300 && xhr.response) {
+      if (xhr.status >= 200 && xhr.status < 300 && xhr.response && xhr.response.size > 100000) {
         if (modalDownloadProgressContainer) {
           if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = '100%';
           if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = '100%';
@@ -691,16 +693,16 @@
           setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
           showToast('Update downloaded! Opening installer...', 'success');
         } catch (blobErr) {
-          window.open(downloadUrl, '_system');
+          window.open(secondaryUrl, '_system');
         }
       } else {
-        // Fallback to browser download if CORS or error
+        // Fallback to secondary browser download
         if (modalDownloadProgressContainer) modalDownloadProgressContainer.classList.add('hidden');
         if (btnUpdateNow) {
           btnUpdateNow.disabled = false;
           btnUpdateNow.textContent = 'Download in Browser';
         }
-        window.open(downloadUrl, '_system');
+        window.open(secondaryUrl, '_system');
         showToast('Direct download opened in browser', 'info');
       }
     };
@@ -711,11 +713,11 @@
         btnUpdateNow.disabled = false;
         btnUpdateNow.textContent = 'Download in Browser';
       }
-      window.open(downloadUrl, '_system');
+      window.open(secondaryUrl, '_system');
       showToast('Opening update in browser...', 'info');
     };
 
-    xhr.open('GET', downloadUrl);
+    xhr.open('GET', primaryUrl);
     xhr.send();
   }
 
@@ -749,7 +751,8 @@
 
   function displayUpdateModal(info) {
     isUpdateMandatory = !!info.mandatory;
-    currentRemoteDownloadUrl = info.downloadUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
+    currentRemoteDownloadUrl = info.downloadUrl ? getApiUrl(info.downloadUrl) : getApiUrl('/api/apk/latest');
+    currentRemoteFallbackUrl = info.fallbackUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
     currentRemoteVersion = info.version || '';
 
     updateTitle.textContent = `Update Available (v${info.version})`;
@@ -801,9 +804,7 @@
           }
           return;
         }
-        if (currentRemoteDownloadUrl) {
-          downloadUpdateInApp(currentRemoteDownloadUrl, currentRemoteVersion);
-        }
+        downloadUpdateInApp(currentRemoteDownloadUrl, currentRemoteFallbackUrl, currentRemoteVersion);
       });
     }
 

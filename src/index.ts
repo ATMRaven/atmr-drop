@@ -82,6 +82,52 @@ export default {
       return handleDeleteDrop(code, env);
     }
 
+    // Dedicated in-app APK streaming route with CORS & edge caching
+    if (pathname === '/api/apk/latest' || pathname === '/api/apk') {
+      try {
+        let downloadUrl = 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
+        try {
+          const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest', {
+            headers: { 'User-Agent': 'atmr-drop-worker' },
+          });
+          if (ghRes.ok) {
+            const ghData: any = await ghRes.json();
+            if (ghData.assets?.[0]?.browser_download_url) {
+              downloadUrl = ghData.assets[0].browser_download_url;
+            }
+          }
+        } catch (e) {}
+
+        const apkRes = await fetch(downloadUrl, {
+          headers: { 'User-Agent': 'atmr-drop-worker' },
+          redirect: 'follow',
+        });
+
+        if (!apkRes.ok) {
+          return new Response('APK binary not available', { status: 404, headers: corsHeaders });
+        }
+
+        const headers: Record<string, string> = {
+          ...corsHeaders,
+          'Content-Type': 'application/vnd.android.package-archive',
+          'Content-Disposition': 'attachment; filename="atmr-drop.apk"',
+          'Cache-Control': 'public, max-age=180',
+        };
+
+        const len = apkRes.headers.get('content-length');
+        if (len) {
+          headers['Content-Length'] = len;
+        }
+
+        return new Response(apkRes.body, {
+          status: 200,
+          headers,
+        });
+      } catch (err: any) {
+        return new Response('Error streaming APK: ' + (err.message || String(err)), { status: 500, headers: corsHeaders });
+      }
+    }
+
     // Version check endpoint
     if (pathname === '/api/version') {
       try {
@@ -97,7 +143,8 @@ export default {
           }
           return jsonResponse({
             version: tag,
-            downloadUrl: ghData.assets?.[0]?.browser_download_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
+            downloadUrl: '/api/apk/latest',
+            fallbackUrl: ghData.assets?.[0]?.browser_download_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
             releasePage: ghData.html_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest',
             mandatory: false,
             releaseNotes: cleanNotes || 'Performance enhancements and bug fixes.',
@@ -106,8 +153,9 @@ export default {
       } catch (e) {}
 
       return jsonResponse({
-        version: '1.0.20',
-        downloadUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
+        version: '1.0.21',
+        downloadUrl: '/api/apk/latest',
+        fallbackUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
         releasePage: 'https://github.com/ATMRaven/atmr-drop/releases/latest',
         mandatory: false,
         releaseNotes: '• Real-time in-app direct APK streaming downloader with live progress bar\n• Real-time upload status bar with speed & byte tracking\n• Instant drop pickup detection, audio chime & push notifications\n• Smart 1-hour expiration cap for files > 1 GB & 10 GB capacity\n• Performance optimizations and bug fixes',
