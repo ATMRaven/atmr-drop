@@ -3,7 +3,9 @@ export interface FileEntry {
   name: string;
   size: number;
   type: string;
-  kvKey: string;
+  kvKey?: string;
+  chunkCount?: number;
+  chunkSize?: number;
 }
 
 export interface DropMetadata {
@@ -27,10 +29,13 @@ export interface CreateDropRequest {
   ttlSeconds?: number;
   burnAfterRead?: boolean;
   files?: Array<{
+    id?: string;
     name: string;
     type: string;
     size: number;
-    dataBase64: string;
+    chunkCount?: number;
+    chunkSize?: number;
+    dataBase64?: string;
   }>;
 }
 

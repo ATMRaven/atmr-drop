@@ -936,7 +936,7 @@
   function setupPinInputs() {
     pinCells.forEach((cell, idx) => {
       cell.addEventListener('input', (e) => {
-        const val = e.target.value.replace(/\D/g, '');
+        const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
         cell.value = val ? val[val.length - 1] : '';
 
         if (cell.value && idx < pinCells.length - 1) {
@@ -962,8 +962,8 @@
 
       cell.addEventListener('paste', (e) => {
         e.preventDefault();
-        const paste = (e.clipboardData || window.clipboardData).getData('text').trim();
-        const digits = paste.replace(/\D/g, '').slice(0, 4);
+        const paste = (e.clipboardData || window.clipboardData).getData('text').trim().toUpperCase();
+        const digits = paste.replace(/[^A-Z0-9]/g, '').slice(0, 4);
         if (digits) {
           digits.split('').forEach((d, i) => {
             if (pinCells[i]) pinCells[i].value = d;
@@ -1069,21 +1069,16 @@
     }
 
     files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const base64 = e.target.result.split(',')[1];
-        stagedFiles.push({
-          id: 'f_' + Math.random().toString(36).substring(2, 9),
-          name: file.name,
-          type: file.type || 'application/octet-stream',
-          size: file.size,
-          dataBase64: base64
-        });
-        renderStagedFiles();
-        updateLiveInputInfo();
-      };
-      reader.readAsDataURL(file);
+      stagedFiles.push({
+        id: 'f_' + Math.random().toString(36).substring(2, 9),
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        fileHandle: file
+      });
     });
+    renderStagedFiles();
+    updateLiveInputInfo();
     playChime('pop');
   }
 
@@ -1160,20 +1155,21 @@
       cameraCanvas.height = cameraVideo.videoHeight || 480;
       const ctx = cameraCanvas.getContext('2d');
       ctx.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
-      const dataUrl = cameraCanvas.toDataURL('image/jpeg', 0.85);
-      const base64 = dataUrl.split(',')[1];
       const filename = `photo_${Date.now()}.jpg`;
 
-      stagedFiles.push({
-        id: 'f_' + Math.random().toString(36).substring(2, 9),
-        name: filename,
-        type: 'image/jpeg',
-        size: Math.round(base64.length * 0.75),
-        dataBase64: base64
-      });
+      cameraCanvas.toBlob((blob) => {
+        if (!blob) return;
+        stagedFiles.push({
+          id: 'f_' + Math.random().toString(36).substring(2, 9),
+          name: filename,
+          type: 'image/jpeg',
+          size: blob.size,
+          fileHandle: blob
+        });
+        renderStagedFiles();
+        updateLiveInputInfo();
+      }, 'image/jpeg', 0.85);
 
-      renderStagedFiles();
-      updateLiveInputInfo();
       closeCamera();
       playChime('pop');
       showToast('Photo captured');
@@ -1206,78 +1202,120 @@
       });
     }
 
-    function uploadDropWithProgress(payload) {
-      return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        const startTime = performance.now();
-        const totalEstimatedBytes = (payload.files || []).reduce((acc, f) => acc + (f.size || 0), 0) + (payload.text ? payload.text.length : 0);
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB per chunk
 
-        // Show and initialize upload progress container
-        if (uploadProgressContainer) {
-          uploadProgressContainer.classList.remove('hidden');
-          if (uploadProgressBar) uploadProgressBar.style.width = '0%';
-          if (uploadPercentBadge) uploadPercentBadge.textContent = '0%';
-          const fileCount = (payload.files || []).length;
-          if (uploadStatusText) {
-            if (fileCount > 0) {
-              uploadStatusText.textContent = `Uploading ${fileCount} file${fileCount > 1 ? 's' : ''}...`;
-            } else {
-              uploadStatusText.textContent = 'Encrypting & uploading...';
-            }
-          }
-          if (uploadBytesText) uploadBytesText.textContent = `0 B / ${formatFileSize(totalEstimatedBytes || 1024)}`;
-          if (uploadSpeedText) uploadSpeedText.textContent = '0 KB/s';
+    async function uploadDropWithProgress(params) {
+      const { text, files, ttlSeconds, burnAfterRead } = params;
+      const totalBytes = (files || []).reduce((acc, f) => acc + (f.size || 0), 0) + (text ? text.length : 0);
+      const startTime = performance.now();
+
+      // Show and initialize upload progress container
+      if (uploadProgressContainer) {
+        uploadProgressContainer.classList.remove('hidden');
+        if (uploadProgressBar) uploadProgressBar.style.width = '0%';
+        if (uploadPercentBadge) uploadPercentBadge.textContent = '0%';
+        if (uploadStatusText) {
+          uploadStatusText.textContent = (files && files.length > 0)
+            ? `Initializing wire drop for ${files.length} file${files.length > 1 ? 's' : ''}...`
+            : 'Encrypting & uploading...';
         }
+        if (uploadBytesText) uploadBytesText.textContent = `0 B / ${formatFileSize(totalBytes || 1024)}`;
+        if (uploadSpeedText) uploadSpeedText.textContent = '0 KB/s';
+      }
 
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable && uploadProgressContainer) {
-            const percent = Math.min(98, Math.round((event.loaded / event.total) * 100));
-            if (uploadProgressBar) uploadProgressBar.style.width = `${percent}%`;
-            if (uploadPercentBadge) uploadPercentBadge.textContent = `${percent}%`;
+      // Step 1: Create metadata manifest
+      const filesManifest = (files || []).map(f => ({
+        id: f.id,
+        name: f.name,
+        type: f.type,
+        size: f.size,
+        chunkCount: Math.ceil(f.size / CHUNK_SIZE) || 1,
+        chunkSize: CHUNK_SIZE,
+      }));
 
-            const elapsedSec = (performance.now() - startTime) / 1000;
-            const speed = elapsedSec > 0 ? event.loaded / elapsedSec : 0;
-            if (uploadBytesText) uploadBytesText.textContent = `${formatFileSize(event.loaded)} / ${formatFileSize(event.total)}`;
-            if (uploadSpeedText) uploadSpeedText.textContent = `${formatFileSize(speed)}/s`;
-          }
-        };
-
-        xhr.onload = () => {
-          if (uploadProgressContainer) {
-            if (uploadProgressBar) uploadProgressBar.style.width = '100%';
-            if (uploadPercentBadge) uploadPercentBadge.textContent = '100%';
-            if (uploadStatusText) uploadStatusText.textContent = 'Finalizing wire drop...';
-          }
-
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const data = JSON.parse(xhr.responseText);
-              resolve(data);
-            } catch (e) {
-              reject(new Error('Server returned an invalid response.'));
-            }
-          } else {
-            try {
-              const errData = JSON.parse(xhr.responseText);
-              reject(new Error(errData.error || `Upload failed with status ${xhr.status}`));
-            } catch (e) {
-              reject(new Error(`Upload failed with status ${xhr.status}`));
-            }
-          }
-        };
-
-        xhr.onerror = () => {
-          reject(new Error('Network connection error during upload.'));
-        };
-
-        xhr.ontimeout = () => {
-          reject(new Error('Upload request timed out.'));
-        };
-
-        xhr.open('POST', getApiUrl('/api/drop'));
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.send(JSON.stringify(payload));
+      const metaRes = await fetch(getApiUrl('/api/drop'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          files: filesManifest,
+          ttlSeconds,
+          burnAfterRead
+        })
       });
+
+      if (!metaRes.ok) {
+        const errJson = await metaRes.json().catch(() => ({}));
+        throw new Error(errJson.error || `Failed to create drop (${metaRes.status})`);
+      }
+
+      const dropData = await metaRes.json();
+      const code = dropData.code;
+
+      // Step 2: Stream each file's binary chunks
+      let uploadedBytesTotal = text ? text.length : 0;
+
+      for (let fIdx = 0; fIdx < (files || []).length; fIdx++) {
+        const fileObj = files[fIdx];
+        const fileBlob = fileObj.fileHandle;
+        const chunkCount = Math.ceil(fileObj.size / CHUNK_SIZE) || 1;
+
+        for (let cIdx = 0; cIdx < chunkCount; cIdx++) {
+          const start = cIdx * CHUNK_SIZE;
+          const end = Math.min(fileObj.size, start + CHUNK_SIZE);
+          const chunkBlob = fileBlob.slice(start, end);
+
+          if (uploadStatusText) {
+            const chunkPartText = chunkCount > 1 ? ` (part ${cIdx + 1}/${chunkCount})` : '';
+            uploadStatusText.textContent = `Uploading ${fileObj.name}${chunkPartText}...`;
+          }
+
+          await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            let chunkPrevLoaded = 0;
+
+            xhr.upload.onprogress = (event) => {
+              if (event.lengthComputable) {
+                const diff = event.loaded - chunkPrevLoaded;
+                chunkPrevLoaded = event.loaded;
+                uploadedBytesTotal += diff;
+
+                const percent = Math.min(99, Math.round((uploadedBytesTotal / Math.max(1, totalBytes)) * 100));
+                if (uploadProgressBar) uploadProgressBar.style.width = `${percent}%`;
+                if (uploadPercentBadge) uploadPercentBadge.textContent = `${percent}%`;
+
+                const elapsedSec = (performance.now() - startTime) / 1000;
+                const speed = elapsedSec > 0 ? uploadedBytesTotal / elapsedSec : 0;
+                if (uploadBytesText) uploadBytesText.textContent = `${formatFileSize(uploadedBytesTotal)} / ${formatFileSize(totalBytes)}`;
+                if (uploadSpeedText) uploadSpeedText.textContent = `${formatFileSize(speed)}/s`;
+              }
+            };
+
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolve();
+              } else {
+                reject(new Error(`Chunk upload failed with status ${xhr.status}`));
+              }
+            };
+
+            xhr.onerror = () => reject(new Error('Network error during file chunk upload'));
+            xhr.ontimeout = () => reject(new Error('Chunk upload timed out'));
+
+            xhr.open('PUT', getApiUrl(`/api/drop/${code}/file/${fileObj.id}/chunk/${cIdx}`));
+            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+            xhr.send(chunkBlob);
+          });
+        }
+      }
+
+      if (uploadProgressContainer) {
+        if (uploadProgressBar) uploadProgressBar.style.width = '100%';
+        if (uploadPercentBadge) uploadPercentBadge.textContent = '100%';
+        if (uploadStatusText) uploadStatusText.textContent = 'Drop ready!';
+      }
+
+      return dropData;
     }
 
     btnSendDrop.addEventListener('click', async () => {
