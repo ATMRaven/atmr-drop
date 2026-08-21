@@ -9,24 +9,53 @@
   let isExplicitNewSend = false;
   const SENDER_STORAGE_KEY = 'atmr_active_sender_drop';
 
-  // --- SOUND SYSTEM (ElevenLabs High-Fidelity Audio + Harmonic Web Audio Fallback) ---
+  // --- SOUND SYSTEM (7-Variant Random Drop Audio + Harmonic Web Audio Fallback) ---
   const audioCtx = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) ? new (window.AudioContext || window.webkitAudioContext)() : null;
-  const soundSuccess = new Audio('sounds/drop_success.mp3');
+  const dropSounds = [
+    new Audio('sounds/drop_1.mp3'),
+    new Audio('sounds/drop_2.mp3'),
+    new Audio('sounds/drop_3.mp3'),
+    new Audio('sounds/drop_4.mp3'),
+    new Audio('sounds/drop_5.mp3'),
+    new Audio('sounds/drop_6.mp3'),
+    new Audio('sounds/drop_7.mp3')
+  ];
+  dropSounds.forEach(s => {
+    s.preload = 'auto';
+  });
+
   const soundPop = new Audio('sounds/drop_pop.mp3');
-  soundSuccess.preload = 'auto';
   soundPop.preload = 'auto';
+
+  function getRandomDropSound() {
+    const idx = Math.floor(Math.random() * dropSounds.length);
+    return dropSounds[idx];
+  }
 
   function playChime(type) {
     try {
-      const audio = (type === 'success') ? soundSuccess : soundPop;
-      if (audio) {
-        audio.currentTime = 0;
-        audio.volume = 0.85;
-        const playPromise = audio.play();
-        if (playPromise && typeof playPromise.catch === 'function') {
-          playPromise.catch(() => playSyntheticChime(type));
+      if (type === 'success') {
+        const audio = getRandomDropSound();
+        if (audio) {
+          audio.currentTime = 0;
+          audio.volume = 0.9;
+          const playPromise = audio.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => playSyntheticChime('success'));
+          }
+          return;
         }
-        return;
+      } else {
+        const audio = soundPop;
+        if (audio) {
+          audio.currentTime = 0;
+          audio.volume = 0.85;
+          const playPromise = audio.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => playSyntheticChime('copy'));
+          }
+          return;
+        }
       }
     } catch (e) {}
     playSyntheticChime(type);
@@ -629,6 +658,8 @@
         checkAppUpdate(false);
       }
     });
+
+    window.showAppUpdateModal = displayUpdateModal;
   }
 
   // --- TAB NAVIGATION ---

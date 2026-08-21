@@ -1523,16 +1523,15 @@ html, body {
   margin-top: 14px;
 }
 
-/* --------------------------------------------------------------------------
-   IN-APP UPDATE MODAL
-   -------------------------------------------------------------------------- */
 .update-modal-card {
   text-align: center;
   max-width: 380px;
+  width: 90vw;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  padding: 24px 22px;
 }
 
 .update-header-glow {
@@ -1568,28 +1567,33 @@ html, body {
 
 .update-notes-container {
   width: 100%;
-  background: var(--input-glass);
-  border: 1px solid var(--input-border);
+  background: rgba(14, 18, 28, 0.75);
+  border: 1px solid rgba(56, 189, 248, 0.2);
   border-radius: var(--radius-input);
   padding: 12px 14px;
   text-align: left;
-  font-size: 0.8rem;
-  line-height: 1.4;
-  margin: 4px 0 8px 0;
+  margin: 2px 0 6px 0;
+  max-height: 125px;
+  overflow-y: auto;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25);
 }
 
 .update-notes-label {
   font-weight: 600;
   color: #38bdf8;
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   text-transform: uppercase;
-  font-size: 0.7rem;
-  letter-spacing: 0.05em;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
 }
 
 .update-notes-body {
-  color: var(--text-primary);
+  color: #e2e8f0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-line;
+  word-break: break-word;
 }
 
 .update-actions-stack {
