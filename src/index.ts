@@ -91,22 +91,26 @@ export default {
         if (ghRes.ok) {
           const ghData: any = await ghRes.json();
           const tag = (ghData.tag_name || '').replace(/^v/, '').trim();
+          let cleanNotes = ghData.body || '';
+          if (cleanNotes.includes('The Daily Drop') || cleanNotes.includes('Published by')) {
+            cleanNotes = '• Real-time in-app direct APK streaming downloader with live progress bar\n• Real-time upload status bar with speed & byte tracking\n• Instant drop pickup detection, audio chime & push notifications\n• Smart 1-hour expiration cap for files > 1 GB & 10 GB capacity\n• Performance optimizations and bug fixes';
+          }
           return jsonResponse({
             version: tag,
             downloadUrl: ghData.assets?.[0]?.browser_download_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
             releasePage: ghData.html_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest',
             mandatory: false,
-            releaseNotes: ghData.body || 'Performance enhancements and bug fixes.',
+            releaseNotes: cleanNotes || 'Performance enhancements and bug fixes.',
           });
         }
       } catch (e) {}
 
       return jsonResponse({
-        version: '1.0.8',
+        version: '1.0.18',
         downloadUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
         releasePage: 'https://github.com/ATMRaven/atmr-drop/releases/latest',
         mandatory: false,
-        releaseNotes: 'Flagship Apple Pro aesthetic, permanent cryptographic signing, and automated in-app update checker.',
+        releaseNotes: '• Real-time in-app direct APK streaming downloader with live progress bar\n• Real-time upload status bar with speed & byte tracking\n• Instant drop pickup detection, audio chime & push notifications\n• Smart 1-hour expiration cap for files > 1 GB & 10 GB capacity\n• Performance optimizations and bug fixes',
       });
     }
 

@@ -719,6 +719,34 @@
     xhr.send();
   }
 
+  function formatReleaseNotes(raw) {
+    if (!raw || typeof raw !== 'string') {
+      return '• Real-time in-app direct APK streaming downloader\n• Real-time upload status bar with speed & byte tracking\n• Instant drop pickup detection & celebratory chime\n• Smart 1-hour expiration cap for files > 1 GB\n• Performance & background transfer enhancements';
+    }
+
+    // If it contains the generic repo header boilerplate, strip it out or provide clean release highlights
+    if (raw.includes('The Daily Drop (atmr-drop) Android App') || raw.includes('Published by') || raw.includes('Seamless Updates')) {
+      const lines = raw.split('\n');
+      const filtered = lines.filter(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return false;
+        if (trimmed.startsWith('#')) return false;
+        if (trimmed.includes('Published by') || trimmed.includes('Web Service') || trimmed.includes('Seamless Updates') || trimmed.includes('Version:')) return false;
+        if (trimmed.includes('Download') && trimmed.includes('.apk')) return false;
+        if (trimmed.includes('Instant cross-device')) return false;
+        return true;
+      });
+
+      if (filtered.length > 0) {
+        return filtered.map(l => l.trim().startsWith('•') || l.trim().startsWith('-') ? l.trim() : `• ${l.trim()}`).join('\n');
+      }
+
+      return '• Real-time in-app direct APK streaming downloader with live progress bar\n• Real-time upload status bar with speed & byte tracking\n• Instant drop pickup detection & celebratory chime\n• Smart 1-hour expiration cap for files > 1 GB\n• Performance & background transfer enhancements';
+    }
+
+    return raw.trim();
+  }
+
   function displayUpdateModal(info) {
     isUpdateMandatory = !!info.mandatory;
     currentRemoteDownloadUrl = info.downloadUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
@@ -728,7 +756,7 @@
     updateDesc.textContent = info.mandatory
       ? 'A critical update is required to continue.'
       : 'A new version of Drop is ready to install.';
-    updateNotesText.textContent = info.releaseNotes || 'Bug fixes and performance enhancements.';
+    updateNotesText.textContent = formatReleaseNotes(info.releaseNotes);
 
     if (modalDownloadProgressContainer) {
       modalDownloadProgressContainer.classList.add('hidden');

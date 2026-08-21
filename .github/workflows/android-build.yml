@@ -67,13 +67,9 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: The Daily Drop Android v1.0.${{ github.run_number }}
           body: |
-            ## The Daily Drop (atmr-drop) Android App
-
-            Instant cross-device file, photo, and text wire drop application.
-            - **Published by**: atmr
-            - **Web Service**: https://drop.atmr.workers.dev
-            - **Version**: v1.0.${{ github.run_number }}
-            - **Seamless Updates**: Signed with permanent keystore for in-place app updates.
-
-            Download `atmr-drop.apk` below and open it to install or update directly over your existing app.
+            • Real-time in-app direct APK streaming downloader with live progress bar
+            • Real-time upload status bar with live speed & transferred byte tracking
+            • Instant drop pickup detection, celebratory audio chime & native push notifications
+            • Smart 1-hour expiration cap for files > 1 GB & 10 GB capacity
+            • Performance optimizations & background transfer enhancements
           files: atmr-drop.apk
