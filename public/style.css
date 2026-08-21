@@ -1547,6 +1547,28 @@ html, body {
   padding: 8px 0;
 }
 
+.footer-version-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: all var(--transition-smooth);
+}
+
+.footer-version-btn:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+  transform: translateY(-1px);
+}
+
 .footer-dot {
   opacity: 0.4;
 }

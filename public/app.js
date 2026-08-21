@@ -127,15 +127,18 @@
 
   // --- APP VERSION, ENVIRONMENT & API RESOLUTION ---
   const PROD_API_ORIGIN = 'https://drop.atmr.workers.dev';
-  const APP_CURRENT_VERSION = (window.APP_VERSION || '1.0.9').replace(/^v/, '').trim();
+  const APP_CURRENT_VERSION = (window.APP_VERSION || '1.0.12').replace(/^v/, '').trim();
   let isUpdateMandatory = false;
 
   function isCapacitorNative() {
-    return (
-      (typeof window.Capacitor !== 'undefined' && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
-      window.location.protocol === 'capacitor:' ||
-      window.location.protocol === 'file:'
-    );
+    if (typeof window.Capacitor !== 'undefined') {
+      if (typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) return true;
+      if (window.Capacitor.platform === 'android' || window.Capacitor.platform === 'ios') return true;
+    }
+    if (window.location.protocol === 'capacitor:' || window.location.protocol === 'file:') return true;
+    if (window.location.hostname === 'localhost' && window.location.port === '') return true;
+    if (/Android.*wv/i.test(navigator.userAgent) || (navigator.userAgent.includes('Android') && navigator.userAgent.includes('Version/4.0'))) return true;
+    return false;
   }
 
   function isMobileWeb() {
@@ -144,10 +147,11 @@
   }
 
   function getApiUrl(path) {
-    if (isCapacitorNative()) {
-      return `${PROD_API_ORIGIN}${path.startsWith('/') ? path : '/' + path}`;
+    const cleanPath = path.startsWith('/') ? path : '/' + path;
+    if (isCapacitorNative() || (window.location.hostname === 'localhost' && window.location.port === '')) {
+      return `${PROD_API_ORIGIN}${cleanPath}`;
     }
-    return path;
+    return cleanPath;
   }
 
   const updateModal = document.getElementById('update-modal');
@@ -157,6 +161,8 @@
   const updateNotesText = document.getElementById('update-notes-text');
   const btnUpdateNow = document.getElementById('btn-update-now');
   const btnUpdateLater = document.getElementById('btn-update-later');
+  const btnCheckUpdate = document.getElementById('btn-check-update');
+  const footerVersionVal = document.getElementById('footer-version-val');
 
   // --- CONTENT ANALYSIS & URL HELPERS ---
   function extractUrls(text) {
@@ -301,6 +307,9 @@
     setupServiceWorker();
     checkDirectPinRoute();
     checkAppUpdate();
+
+    window.checkAppUpdate = checkAppUpdate;
+    window.displayUpdateModal = displayUpdateModal;
   }
 
   function isStandalonePwa() {
@@ -384,21 +393,21 @@
     }
   }
 
-  // --- IN-APP UPDATE CHECKER (NATIVE MOBILE ONLY) ---
-  async function checkAppUpdate() {
-    if (!isCapacitorNative()) {
-      return;
+  // --- IN-APP UPDATE CHECKER ---
+  async function checkAppUpdate(isManual = false) {
+    if (isManual) {
+      showToast('Checking for updates...', 'info');
     }
 
     try {
       let data = null;
       try {
-        const res = await fetch(getApiUrl('/api/version'));
+        const res = await fetch(getApiUrl('/api/version'), { cache: 'no-cache' });
         if (res.ok) data = await res.json();
       } catch (e) {}
 
       if (!data || !data.version) {
-        const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest');
+        const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest', { cache: 'no-cache' });
         if (ghRes.ok) {
           const ghData = await ghRes.json();
           const tag = (ghData.tag_name || '').replace(/^v/, '').trim();
@@ -416,10 +425,17 @@
         console.log(`[Version Check] Installed: v${APP_CURRENT_VERSION} | Latest: v${data.version} | Update needed: ${isNew}`);
         if (isNew) {
           displayUpdateModal(data);
+        } else if (isManual) {
+          showToast(`Drop is up to date (v${APP_CURRENT_VERSION})`, 'success');
         }
+      } else if (isManual) {
+        showToast('Unable to reach update server.', 'error');
       }
     } catch (err) {
-      console.warn('Update check failed (offline or rate limited):', err);
+      console.warn('Update check failed:', err);
+      if (isManual) {
+        showToast('Update check failed. Check connection.', 'error');
+      }
     }
   }
 
@@ -460,6 +476,17 @@
   }
 
   function setupUpdateModal() {
+    if (footerVersionVal) {
+      footerVersionVal.textContent = APP_CURRENT_VERSION;
+    }
+
+    if (btnCheckUpdate) {
+      btnCheckUpdate.addEventListener('click', (e) => {
+        e.preventDefault();
+        checkAppUpdate(true);
+      });
+    }
+
     btnUpdateLater.addEventListener('click', () => {
       updateModal.classList.remove('active');
     });
@@ -467,6 +494,19 @@
     updateModalOverlay.addEventListener('click', () => {
       if (!isUpdateMandatory) {
         updateModal.classList.remove('active');
+      }
+    });
+
+    // Check updates when app returns to foreground
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && isCapacitorNative()) {
+        checkAppUpdate(false);
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      if (isCapacitorNative()) {
+        checkAppUpdate(false);
       }
     });
   }
