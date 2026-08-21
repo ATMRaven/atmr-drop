@@ -204,7 +204,7 @@ export default {
           ghPage = ghData.html_url || '';
         }
 
-        const effectiveVersion = kvMeta?.version || ghTag || '1.0.24';
+        const effectiveVersion = kvMeta?.version || ghTag || '1.0.26';
         let cleanNotes = ghNotes;
         if (!cleanNotes || cleanNotes.includes('The Daily Drop') || cleanNotes.includes('Published by')) {
           cleanNotes = '• Real-time in-app direct APK streaming downloader with live progress bar\n• Real-time upload status bar with live speed & byte tracking\n• Instant drop pickup detection, audio chime & push notifications\n• Smart 1-hour expiration cap for files > 1 GB & 10 GB capacity\n• Performance optimizations and bug fixes';
@@ -222,7 +222,7 @@ export default {
       } catch (e) {}
 
       return jsonResponse({
-        version: '1.0.24',
+        version: '1.0.26',
         downloadUrl: '/api/apk/latest',
         fallbackUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
         releasePage: 'https://github.com/ATMRaven/atmr-drop/releases/latest',
