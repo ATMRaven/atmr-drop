@@ -4,9 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Drop • Instant Cross-Device Transfer</title>
-  <meta name="description" content="Minimalist, ultra-fast cross-device text, photo, and file transfer powered by Cloudflare Workers.">
+  <meta name="description" content="Minimalist, ultra-fast cross-device text, photo, and file transfer with WebRTC P2P and Zero-Knowledge E2EE.">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#07090e">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Drop">
@@ -30,9 +31,16 @@
           <span class="brand-dot"></span>
         </a>
       </div>
-      <div class="status-badge" title="Connected to Cloudflare Global Edge">
-        <span class="status-dot"></span>
-        <span class="status-label">Online</span>
+      <div class="header-right-actions">
+        <button type="button" id="btn-open-history" class="btn-vault-history-toggle" title="Open Vault History">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><path d="M10 12h4"></path></svg>
+          <span>Vault</span>
+          <span id="history-badge-count" class="history-count-badge hidden">0</span>
+        </button>
+        <div class="status-badge" title="Connected to Cloudflare Global Edge">
+          <span class="status-dot"></span>
+          <span class="status-label">Online</span>
+        </div>
       </div>
     </header>
 
@@ -44,7 +52,7 @@
         </div>
         <div class="app-banner-text">
           <span class="app-banner-title">Experience Drop for Android</span>
-          <span class="app-banner-desc">Faster background transfers &amp; push drops</span>
+          <span class="app-banner-desc">System Share Sheet &amp; background drops</span>
         </div>
       </div>
       <div class="app-banner-actions">
@@ -103,22 +111,28 @@
           </div>
         </div>
 
-        <!-- File Upload Dropzone -->
+        <!-- File Upload Dropzone (Supports Files & Folders) -->
         <div class="form-group">
           <div id="dropzone" class="clean-dropzone" role="button" tabindex="0">
             <input type="file" id="file-input" class="hidden-input" multiple>
+            <input type="file" id="folder-input" class="hidden-input" webkitdirectory directory multiple>
             <div class="dropzone-inner">
               <div class="dropzone-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
               </div>
               <div class="dropzone-text">
-                <span class="dropzone-title">Drop files here or browse</span>
-                <span class="dropzone-sub">Images, videos, documents &amp; large files up to 10 GB</span>
+                <span class="dropzone-title">Drop files or folders here</span>
+                <span class="dropzone-sub">Images, videos, folders &amp; large files up to 10 GB</span>
               </div>
             </div>
-            <button type="button" id="btn-camera" class="btn-camera-snap" title="Take photo with camera">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-            </button>
+            <div class="dropzone-tools">
+              <button type="button" id="btn-folder-snap" class="btn-dropzone-tool" title="Upload complete folder / directory">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              </button>
+              <button type="button" id="btn-camera" class="btn-dropzone-tool" title="Take photo with camera">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              </button>
+            </div>
           </div>
 
           <!-- Staged files chips -->
@@ -143,6 +157,38 @@
               <span class="toggle-track"></span>
               <span class="toggle-label">Burn after reading</span>
             </label>
+          </div>
+        </div>
+
+        <!-- Advanced Settings Toggle & Drawer (Custom 4-Char PIN & E2EE) -->
+        <div class="advanced-section">
+          <button type="button" id="btn-toggle-advanced" class="btn-advanced-toggle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span>Advanced Options</span>
+            <span class="advanced-chevron" id="advanced-chevron">▾</span>
+          </button>
+
+          <div id="advanced-drawer" class="advanced-drawer hidden">
+            <!-- Custom 4-Character PIN Input -->
+            <div class="advanced-field">
+              <label for="input-custom-pin" class="advanced-label">
+                <span>Custom 4-Char PIN (Vanity Code)</span>
+                <span class="advanced-sublabel">Letters &amp; numbers (e.g. COOL, 7777)</span>
+              </label>
+              <input type="text" id="input-custom-pin" class="clean-input custom-pin-input" maxlength="4" placeholder="Auto-generate" autocomplete="off">
+            </div>
+
+            <!-- Zero-Knowledge E2EE Toggle -->
+            <div class="advanced-field">
+              <label class="clean-toggle e2ee-toggle">
+                <input type="checkbox" id="check-e2ee">
+                <span class="toggle-track"></span>
+                <div class="e2ee-toggle-label-wrap">
+                  <span class="e2ee-badge-pill">🔐 Zero-Knowledge E2EE</span>
+                  <span class="advanced-sublabel">Client-side AES-256-GCM (#key=...)</span>
+                </div>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -175,20 +221,28 @@
 
       </section>
 
-      <!-- ================= VIEW 2: RECEIVE (PIN INPUT) ================= -->
+      <!-- ================= VIEW 2: RECEIVE (PIN INPUT & QR SCANNER) ================= -->
       <section id="view-receive" class="view-panel" role="tabpanel" aria-labelledby="tab-receive">
         
         <div class="receive-intro">
           <h2 class="section-title">Enter 4-Digit PIN</h2>
-          <p class="section-desc">Type the code displayed on the sender's screen</p>
+          <p class="section-desc">Type code or scan sender's QR code with camera</p>
         </div>
 
-        <!-- 4-Box PIN Input -->
+        <!-- 4-Box PIN Input (Case-Insensitive Alphanumeric + Auto-Paste) -->
         <div class="pin-input-group">
-          <input type="text" id="pin-digit-1" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autofocus>
-          <input type="text" id="pin-digit-2" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-          <input type="text" id="pin-digit-3" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-          <input type="text" id="pin-digit-4" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+          <input type="text" id="pin-digit-1" class="pin-box" maxlength="1" autocomplete="off" autofocus>
+          <input type="text" id="pin-digit-2" class="pin-box" maxlength="1" autocomplete="off">
+          <input type="text" id="pin-digit-3" class="pin-box" maxlength="1" autocomplete="off">
+          <input type="text" id="pin-digit-4" class="pin-box" maxlength="1" autocomplete="off">
+        </div>
+
+        <!-- QR Scanner Fast Action Button -->
+        <div class="receive-quick-actions">
+          <button type="button" id="btn-scan-qr" class="btn-qr-scan-action">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><rect x="7" y="7" width="10" height="10" rx="1"></rect></svg>
+            <span>Scan QR Code with Camera</span>
+          </button>
         </div>
 
         <div class="action-footer">
@@ -199,7 +253,7 @@
 
       </section>
 
-      <!-- ================= VIEW 3: SHARE (ACTIVE PIN & QR) ================= -->
+      <!-- ================= VIEW 3: SHARE (ACTIVE PIN, WEBRTC & QR) ================= -->
       <section id="view-share" class="view-panel">
         
         <!-- Drop Picked Up Banner -->
@@ -226,7 +280,18 @@
           <span class="pin-hint">Click to copy</span>
         </div>
 
-        <!-- Drop Payload Information / Overview Widget -->
+        <!-- P2P & E2EE Badges -->
+        <div id="share-badges-row" class="share-badges-row">
+          <div id="share-e2ee-badge" class="badge-pill gold-pill hidden">
+            <span>🔐 Zero-Knowledge E2EE</span>
+          </div>
+          <div id="share-p2p-badge" class="badge-pill green-pill">
+            <span class="p2p-dot"></span>
+            <span id="share-p2p-text">⚡ P2P Direct LAN Ready</span>
+          </div>
+        </div>
+
+        <!-- Drop Payload Overview Widget -->
         <div id="share-drop-info" class="share-payload-card">
           <div class="payload-card-header">
             <div class="payload-badge" id="share-payload-badge">
@@ -236,7 +301,7 @@
             <span class="payload-stat-pill" id="share-payload-stat">1 URL</span>
           </div>
 
-          <!-- Link Specific Box -->
+          <!-- Link Box -->
           <div id="share-link-box" class="share-link-box hidden">
             <div class="share-link-icon-wrap">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
@@ -255,13 +320,13 @@
             <div class="share-text-snippet" id="share-text-snippet"></div>
           </div>
 
-          <!-- Attached Files / Photos Breakdown -->
+          <!-- Attached Files / Folders Breakdown -->
           <div id="share-files-box" class="share-files-box hidden">
             <div class="share-files-chips" id="share-files-chips"></div>
           </div>
         </div>
 
-        <!-- QR Code & Link -->
+        <!-- QR Code & Direct Link -->
         <div class="share-qr-wrapper">
           <div id="share-qrcode-canvas" class="clean-qr-box"></div>
           <p class="qr-hint">Scan with camera on phone or tablet</p>
@@ -277,7 +342,7 @@
         </div>
 
         <div class="share-actions-row">
-          <button id="btn-cancel-drop" class="btn-ghost text-danger">Delete</button>
+          <button id="btn-cancel-drop" class="btn-ghost text-danger">Revoke &amp; Delete</button>
           <button id="btn-new-send" class="btn-secondary">New Drop</button>
         </div>
 
@@ -294,11 +359,21 @@
           <span id="receive-expiry-text" class="time-badge">14:59</span>
         </div>
 
+        <!-- Transfer Tech Badges (P2P / E2EE) -->
+        <div class="vault-tech-row">
+          <div id="vault-e2ee-badge" class="badge-pill gold-pill hidden">
+            <span>🔐 Zero-Knowledge Decrypted</span>
+          </div>
+          <div id="vault-p2p-badge" class="badge-pill green-pill hidden">
+            <span>⚡ P2P Direct Local Transfer</span>
+          </div>
+        </div>
+
         <div id="receive-burn-notice" class="burn-alert hidden">
           🔥 This drop has self-destructed on the server.
         </div>
 
-        <!-- Direct Link Hero Card (for standalone URL drops) -->
+        <!-- Direct Link Hero Card -->
         <div id="received-link-hero" class="vault-link-hero hidden">
           <div class="vault-link-hero-top">
             <div class="vault-link-hero-icon">
@@ -344,10 +419,10 @@
           <div id="received-images-grid" class="image-gallery-grid"></div>
         </div>
 
-        <!-- Received Files -->
+        <!-- Received Files & Directories -->
         <div id="received-files-container" class="vault-block hidden">
           <div class="block-top">
-            <span class="block-label">Files (<span id="files-count">0</span>)</span>
+            <span class="block-label">Files &amp; Folders (<span id="files-count">0</span>)</span>
             <button id="btn-download-all-zip" class="btn-secondary sm">Download All (.zip)</button>
           </div>
           <div id="received-files-list" class="file-rows-list"></div>
@@ -367,14 +442,14 @@
     <footer class="app-footer">
       <span>drop.atmr.workers.dev</span>
       <span class="footer-dot">•</span>
-      <button type="button" id="btn-check-update" class="footer-version-btn" title="Check for updates">v<span id="footer-version-val">1.0.12</span></button>
+      <button type="button" id="btn-check-update" class="footer-version-btn" title="Check for updates">v<span id="footer-version-val">1.0.28</span></button>
       <span class="footer-dot">•</span>
       <span>Encrypted P2P &amp; Edge</span>
     </footer>
 
   </div>
 
-  <!-- Camera Modal -->
+  <!-- Camera Photo Modal -->
   <div id="camera-modal" class="clean-modal" aria-hidden="true">
     <div class="modal-overlay"></div>
     <div class="modal-card">
@@ -388,6 +463,65 @@
       </div>
       <div class="modal-footer">
         <button id="btn-camera-snap" class="btn-primary full-width">Capture</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Camera QR Scanner Modal -->
+  <div id="qr-scanner-modal" class="clean-modal" aria-hidden="true">
+    <div class="modal-overlay" id="qr-modal-overlay"></div>
+    <div class="modal-card qr-modal-card">
+      <div class="modal-header">
+        <h3 class="modal-heading">Scan Drop QR</h3>
+        <button id="btn-close-qr-scanner" class="btn-modal-close">&times;</button>
+      </div>
+      <div class="modal-body qr-scanner-body">
+        <div class="qr-viewfinder-wrapper">
+          <video id="qr-video" autoplay playsinline></video>
+          <canvas id="qr-canvas" class="hidden"></canvas>
+          <div class="qr-target-overlay">
+            <div class="qr-laser-line"></div>
+            <div class="qr-corner top-left"></div>
+            <div class="qr-corner top-right"></div>
+            <div class="qr-corner bottom-left"></div>
+            <div class="qr-corner bottom-right"></div>
+          </div>
+        </div>
+        <p class="qr-status-hint" id="qr-status-hint">Point camera at sender's QR code</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dedicated Vault History Modal -->
+  <div id="history-modal" class="clean-modal" aria-hidden="true">
+    <div class="modal-overlay" id="history-modal-overlay"></div>
+    <div class="modal-card history-modal-card">
+      <div class="modal-header">
+        <div class="history-title-wrap">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><path d="M10 12h4"></path></svg>
+          <h3 class="modal-heading">Vault History</h3>
+        </div>
+        <button id="btn-close-history" class="btn-modal-close">&times;</button>
+      </div>
+      
+      <!-- Filter Tabs -->
+      <div class="history-filter-bar">
+        <button type="button" class="history-filter-btn active" data-filter="all">All</button>
+        <button type="button" class="history-filter-btn" data-filter="sent">Sent</button>
+        <button type="button" class="history-filter-btn" data-filter="received">Received</button>
+      </div>
+
+      <div class="modal-body history-modal-body">
+        <div id="history-list" class="history-cards-list"></div>
+        <div id="history-empty" class="history-empty-state hidden">
+          <span class="empty-icon">🗂️</span>
+          <p class="empty-title">No drops in history</p>
+          <p class="empty-desc">Created and received drops will appear here</p>
+        </div>
+      </div>
+
+      <div class="modal-footer history-footer">
+        <button type="button" id="btn-clear-history" class="btn-ghost text-danger sm">Clear Local History</button>
       </div>
     </div>
   </div>
@@ -447,6 +581,7 @@
   <!-- Scripts -->
   <script src="vendor/qrcode.js"></script>
   <script src="vendor/jszip.min.js"></script>
+  <script src="vendor/jsqr.min.js"></script>
   <script src="version.js"></script>
   <script src="app.js"></script>
 </body>

@@ -1,15 +1,25 @@
 (function () {
   'use strict';
 
-  // --- STATE ---
+  // --- GLOBAL STATE ---
   let stagedFiles = [];
   let activeDropData = null;
   let countdownTimer = null;
   let bannerTimer = null;
+  let historyRefreshTimer = null;
   let isExplicitNewSend = false;
-  const SENDER_STORAGE_KEY = 'atmr_active_sender_drop';
+  let currentE2EEKey = null; // CryptoKey for active drop
+  let currentE2EEKeyB64 = null; // Base64url key string
+  let activePeerConnection = null;
+  let activeDataChannel = null;
+  let isP2PConnected = false;
+  let qrScannerStream = null;
+  let qrScannerAnimId = null;
 
-  // --- SOUND SYSTEM (7-Variant Random Drop Audio + Harmonic Web Audio Fallback) ---
+  const SENDER_STORAGE_KEY = 'atmr_active_sender_drop';
+  const VAULT_HISTORY_KEY = 'atmr_drop_vault_history';
+
+  // --- SOUND SYSTEM ---
   const audioCtx = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) ? new (window.AudioContext || window.webkitAudioContext)() : null;
   const dropSounds = [
     new Audio('sounds/drop_1.mp3'),
@@ -20,9 +30,7 @@
     new Audio('sounds/drop_6.mp3'),
     new Audio('sounds/drop_7.mp3')
   ];
-  dropSounds.forEach(s => {
-    s.preload = 'auto';
-  });
+  dropSounds.forEach(s => { s.preload = 'auto'; });
 
   const soundPop = new Audio('sounds/drop_pop.mp3');
   soundPop.preload = 'auto';
@@ -67,7 +75,6 @@
       if (audioCtx.state === 'suspended') audioCtx.resume();
       const now = audioCtx.currentTime;
       if (type === 'success') {
-        // Dual-tone harmonic resonant waterdrop chime
         const osc1 = audioCtx.createOscillator();
         const osc2 = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -78,11 +85,11 @@
         filter.frequency.exponentialRampToValueAtTime(700, now + 0.38);
 
         osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(587.33, now); // D5
-        osc1.frequency.exponentialRampToValueAtTime(880, now + 0.08); // A5
+        osc1.frequency.setValueAtTime(587.33, now);
+        osc1.frequency.exponentialRampToValueAtTime(880, now + 0.08);
 
         osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(1174.66, now); // D6
+        osc2.frequency.setValueAtTime(1174.66, now);
         osc2.frequency.exponentialRampToValueAtTime(1760, now + 0.08);
 
         gain.gain.setValueAtTime(0.12, now);
@@ -98,7 +105,6 @@
         osc1.stop(now + 0.38);
         osc2.stop(now + 0.38);
       } else {
-        // Subtle haptic pop
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sine';
@@ -114,6 +120,73 @@
     } catch (e) {}
   }
 
+  // --- CRYPTO ENGINE: ZERO-KNOWLEDGE AES-256-GCM ---
+  const CryptoEngine = {
+    async generateKey() {
+      return await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+    },
+    async exportKeyB64(key) {
+      const raw = await crypto.subtle.exportKey('raw', key);
+      return btoa(String.fromCharCode(...new Uint8Array(raw)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    },
+    async importKeyB64(b64) {
+      let base64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+      while (base64.length % 4) base64 += '=';
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return await crypto.subtle.importKey(
+        'raw',
+        bytes,
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+    },
+    async encryptBytes(buffer, key) {
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        buffer
+      );
+      const result = new Uint8Array(12 + ciphertext.byteLength);
+      result.set(iv, 0);
+      result.set(new Uint8Array(ciphertext), 12);
+      return result;
+    },
+    async decryptBytes(encryptedBuffer, key) {
+      const bytes = new Uint8Array(encryptedBuffer);
+      if (bytes.byteLength < 12) throw new Error('Encrypted payload too short');
+      const iv = bytes.slice(0, 12);
+      const ciphertext = bytes.slice(12);
+      return await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        ciphertext
+      );
+    },
+    async encryptText(text, key) {
+      const encoder = new TextEncoder();
+      const encoded = encoder.encode(text);
+      const encrypted = await this.encryptBytes(encoded, key);
+      return btoa(String.fromCharCode(...encrypted));
+    },
+    async decryptText(b64, key) {
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const decrypted = await this.decryptBytes(bytes, key);
+      const decoder = new TextDecoder();
+      return decoder.decode(decrypted);
+    }
+  };
+
   // --- DOM ELEMENTS ---
   const tabSend = document.getElementById('tab-send');
   const tabReceive = document.getElementById('tab-receive');
@@ -122,6 +195,17 @@
   const viewReceive = document.getElementById('view-receive');
   const viewShare = document.getElementById('view-share');
   const viewVault = document.getElementById('view-vault');
+
+  // Header & Vault History
+  const btnOpenHistory = document.getElementById('btn-open-history');
+  const historyBadgeCount = document.getElementById('history-badge-count');
+  const historyModal = document.getElementById('history-modal');
+  const historyModalOverlay = document.getElementById('history-modal-overlay');
+  const btnCloseHistory = document.getElementById('btn-close-history');
+  const historyList = document.getElementById('history-list');
+  const historyEmpty = document.getElementById('history-empty');
+  const btnClearHistory = document.getElementById('btn-clear-history');
+  const historyFilterBtns = document.querySelectorAll('.history-filter-btn');
 
   // Active Drop Banner
   const activeDropBanner = document.getElementById('active-drop-banner');
@@ -138,6 +222,15 @@
     document.getElementById('pin-digit-4')
   ];
   const btnFetchDrop = document.getElementById('btn-fetch-drop');
+  const btnScanQr = document.getElementById('btn-scan-qr');
+
+  // QR Scanner Modal
+  const qrScannerModal = document.getElementById('qr-scanner-modal');
+  const qrModalOverlay = document.getElementById('qr-modal-overlay');
+  const btnCloseQrScanner = document.getElementById('btn-close-qr-scanner');
+  const qrVideo = document.getElementById('qr-video');
+  const qrCanvas = document.getElementById('qr-canvas');
+  const qrStatusHint = document.getElementById('qr-status-hint');
 
   // Send elements
   const inputText = document.getElementById('input-text');
@@ -147,28 +240,36 @@
   const liveStats = document.getElementById('live-stats');
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('file-input');
+  const folderInput = document.getElementById('folder-input');
+  const btnFolderSnap = document.getElementById('btn-folder-snap');
+  const btnCamera = document.getElementById('btn-camera');
   const stagedChipsList = document.getElementById('staged-files-list');
+
+  // Advanced Options
+  const btnToggleAdvanced = document.getElementById('btn-toggle-advanced');
+  const advancedDrawer = document.getElementById('advanced-drawer');
+  const inputCustomPin = document.getElementById('input-custom-pin');
+  const checkE2EE = document.getElementById('check-e2ee');
+
   const selectTtl = document.getElementById('select-ttl');
   const ttlLimitNotice = document.getElementById('ttl-limit-notice');
   const checkBurn = document.getElementById('check-burn');
   const btnSendDrop = document.getElementById('btn-send-drop');
-  const btnCamera = document.getElementById('btn-camera');
 
-  // Real-time Upload Progress elements
+  // Progress Bar
   const uploadProgressContainer = document.getElementById('upload-progress-container');
+  const uploadProgressBar = document.getElementById('upload-progress-bar');
   const uploadStatusText = document.getElementById('upload-status-text');
   const uploadPercentBadge = document.getElementById('upload-percent-badge');
-  const uploadProgressBar = document.getElementById('upload-progress-bar');
   const uploadBytesText = document.getElementById('upload-bytes-text');
   const uploadSpeedText = document.getElementById('upload-speed-text');
 
   // Share elements
   const sharePickupBanner = document.getElementById('share-pickup-banner');
+  const sharePinCode = document.getElementById('share-pin-code');
+  const shareTimeLeft = document.getElementById('share-time-left');
   const shareStatusDot = document.getElementById('share-status-dot');
   const shareStatusText = document.getElementById('share-status-text');
-  const btnCopyPin = document.getElementById('btn-copy-pin');
-  const sharePinCode = document.getElementById('share-pin-code');
-  const shareDropInfo = document.getElementById('share-drop-info');
   const sharePayloadBadge = document.getElementById('share-payload-badge');
   const shareBadgeIcon = document.getElementById('share-badge-icon');
   const shareBadgeText = document.getElementById('share-badge-text');
@@ -181,17 +282,22 @@
   const shareTextSnippet = document.getElementById('share-text-snippet');
   const shareFilesBox = document.getElementById('share-files-box');
   const shareFilesChips = document.getElementById('share-files-chips');
-  const shareQrCanvas = document.getElementById('share-qrcode-canvas');
+  const shareE2eeBadge = document.getElementById('share-e2ee-badge');
+  const shareP2pBadge = document.getElementById('share-p2p-badge');
+  const shareP2pText = document.getElementById('share-p2p-text');
+  const shareQrcodeCanvas = document.getElementById('share-qrcode-canvas');
   const shareDirectUrl = document.getElementById('share-direct-url');
   const btnCopyUrl = document.getElementById('btn-copy-url');
-  const shareTimeLeft = document.getElementById('share-time-left');
+  const btnCopyPin = document.getElementById('btn-copy-pin');
   const shareBurnBadge = document.getElementById('share-burn-badge');
   const btnCancelDrop = document.getElementById('btn-cancel-drop');
   const btnNewSend = document.getElementById('btn-new-send');
 
-  // Vault / Receive elements
+  // Vault elements
   const receiveExpiryText = document.getElementById('receive-expiry-text');
   const receiveBurnNotice = document.getElementById('receive-burn-notice');
+  const vaultE2eeBadge = document.getElementById('vault-e2ee-badge');
+  const vaultP2pBadge = document.getElementById('vault-p2p-badge');
   const receivedLinkHero = document.getElementById('received-link-hero');
   const vaultLinkDomain = document.getElementById('vault-link-domain');
   const vaultLinkUrl = document.getElementById('vault-link-url');
@@ -201,738 +307,87 @@
   const receivedTextLabel = document.getElementById('received-text-label');
   const receivedTextBadge = document.getElementById('received-text-badge');
   const btnOpenReceivedLink = document.getElementById('btn-open-received-link');
-  const receivedTextContent = document.getElementById('received-text-content');
   const btnCopyReceivedText = document.getElementById('btn-copy-received-text');
+  const receivedTextContent = document.getElementById('received-text-content');
   const receivedImagesContainer = document.getElementById('received-images-container');
-  const receivedImagesGrid = document.getElementById('received-images-grid');
   const imagesCount = document.getElementById('images-count');
+  const receivedImagesGrid = document.getElementById('received-images-grid');
   const receivedFilesContainer = document.getElementById('received-files-container');
-  const receivedFilesList = document.getElementById('received-files-list');
   const filesCount = document.getElementById('files-count');
+  const receivedFilesList = document.getElementById('received-files-list');
   const btnDownloadAllZip = document.getElementById('btn-download-all-zip');
   const btnReceiveAnother = document.getElementById('btn-receive-another');
 
-  // Camera modal
+  // Mobile App Banner
+  const mobileAppBanner = document.getElementById('mobile-app-banner');
+  const btnDismissAppBanner = document.getElementById('btn-dismiss-app-banner');
+
+  // Camera Modal elements
   const cameraModal = document.getElementById('camera-modal');
   const cameraVideo = document.getElementById('camera-video');
   const cameraCanvas = document.getElementById('camera-canvas');
-  const btnCameraSnap = document.getElementById('btn-camera-snap');
   const btnCameraClose = document.getElementById('btn-camera-close');
-  let mediaStream = null;
-
-  // --- APP VERSION, ENVIRONMENT & API RESOLUTION ---
-  const PROD_API_ORIGIN = 'https://drop.atmr.workers.dev';
-  const APP_CURRENT_VERSION = (window.APP_VERSION || '1.0.13').replace(/^v/, '').trim();
-  let isUpdateMandatory = false;
-
-  function isCapacitorNative() {
-    if (typeof window.Capacitor !== 'undefined') {
-      if (typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) return true;
-      if (window.Capacitor.platform === 'android' || window.Capacitor.platform === 'ios') return true;
-    }
-    if (window.location.protocol === 'capacitor:' || window.location.protocol === 'file:') return true;
-    if (window.location.hostname === 'localhost' && window.location.port === '') return true;
-    if (/Android.*wv/i.test(navigator.userAgent) || (navigator.userAgent.includes('Android') && navigator.userAgent.includes('Version/4.0'))) return true;
-    return false;
-  }
-
-  function isMobileWeb() {
-    if (isCapacitorNative()) return false;
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 640;
-  }
-
-  function getApiUrl(path) {
-    if (!path) return PROD_API_ORIGIN;
-    if (typeof path === 'string' && (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:') || path.startsWith('data:'))) {
-      return path;
-    }
-    const cleanPath = path.startsWith('/') ? path : '/' + path;
-    if (isCapacitorNative() || (window.location.hostname === 'localhost' && window.location.port === '')) {
-      return `${PROD_API_ORIGIN}${cleanPath}`;
-    }
-    return cleanPath;
-  }
-
-  // --- ACTIVE DROP SENDER STORAGE & RECOVERY ---
-  function getActiveSenderDrop() {
-    try {
-      const raw = localStorage.getItem(SENDER_STORAGE_KEY);
-      if (!raw) return null;
-      const drop = JSON.parse(raw);
-      if (drop && drop.code && drop.expiresAt && Number(drop.expiresAt) > Date.now()) {
-        return drop;
-      }
-      clearActiveSenderDrop();
-    } catch (e) {}
-    return null;
-  }
-
-  function saveActiveSenderDrop(drop) {
-    try {
-      localStorage.setItem(SENDER_STORAGE_KEY, JSON.stringify(drop));
-    } catch (e) {}
-    activeDropData = drop;
-    updateActiveDropBanner();
-  }
-
-  function clearActiveSenderDrop() {
-    try {
-      localStorage.removeItem(SENDER_STORAGE_KEY);
-    } catch (e) {}
-    activeDropData = null;
-    updateActiveDropBanner();
-  }
-
-  function updateActiveDropBanner() {
-    if (!activeDropBanner) return;
-    const active = getActiveSenderDrop();
-    if (active) {
-      activeDropBanner.classList.remove('hidden');
-      if (activeBannerPin) activeBannerPin.textContent = active.code;
-      if (activeBannerTime) {
-        const leftSec = Math.max(0, Math.floor((Number(active.expiresAt) - Date.now()) / 1000));
-        const m = Math.floor(leftSec / 60);
-        const s = leftSec % 60;
-        activeBannerTime.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} left`;
-      }
-      if (!bannerTimer) {
-        bannerTimer = setInterval(() => {
-          const cur = getActiveSenderDrop();
-          if (!cur) {
-            clearInterval(bannerTimer);
-            bannerTimer = null;
-            activeDropBanner.classList.add('hidden');
-          } else if (activeBannerTime) {
-            const leftSec = Math.max(0, Math.floor((Number(cur.expiresAt) - Date.now()) / 1000));
-            const m = Math.floor(leftSec / 60);
-            const s = leftSec % 60;
-            activeBannerTime.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} left`;
-          }
-        }, 1000);
-      }
-    } else {
-      activeDropBanner.classList.add('hidden');
-      if (bannerTimer) {
-        clearInterval(bannerTimer);
-        bannerTimer = null;
-      }
-    }
-  }
-
-  const updateModal = document.getElementById('update-modal');
-  const updateModalOverlay = document.getElementById('update-modal-overlay');
-  const updateTitle = document.getElementById('update-title');
-  const updateDesc = document.getElementById('update-desc');
-  const updateNotesText = document.getElementById('update-notes-text');
-  const modalDownloadProgressContainer = document.getElementById('modal-download-progress-container');
-  const modalDownloadStatusText = document.getElementById('modal-download-status-text');
-  const modalDownloadPercentBadge = document.getElementById('modal-download-percent-badge');
-  const modalDownloadProgressBar = document.getElementById('modal-download-progress-bar');
-  const modalDownloadBytesText = document.getElementById('modal-download-bytes-text');
-  const modalDownloadSpeedText = document.getElementById('modal-download-speed-text');
-  const btnUpdateNow = document.getElementById('btn-update-now');
-  const btnUpdateLater = document.getElementById('btn-update-later');
-  const btnCheckUpdate = document.getElementById('btn-check-update');
-  const footerVersionVal = document.getElementById('footer-version-val');
-  let currentRemoteDownloadUrl = '';
-  let currentRemoteFallbackUrl = '';
-  let currentRemoteVersion = '';
-
-  // --- CONTENT ANALYSIS & URL HELPERS ---
-  function extractUrls(text) {
-    if (!text || typeof text !== 'string') return [];
-    const urlRegex = /(https?:\/\/[^\s<>"'`()]+|www\.[^\s<>"'`()]+|[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(?:\/[^\s<>"'`()]*)?)/gi;
-    const matches = text.match(urlRegex) || [];
-    const results = [];
-    const seen = new Set();
-
-    for (const m of matches) {
-      let raw = m.replace(/[.,;!?)]+$/, '');
-      if (raw.length < 4 || seen.has(raw)) continue;
-      seen.add(raw);
-
-      let href = raw;
-      if (!/^https?:\/\//i.test(href)) {
-        href = 'https://' + href;
-      }
-
-      let domain = '';
-      try {
-        const u = new URL(href);
-        domain = u.hostname.replace(/^www\./i, '');
-      } catch (e) {
-        domain = raw.split('/')[0].replace(/^www\./i, '');
-      }
-
-      results.push({ raw, href, domain });
-    }
-    return results;
-  }
-
-  function isPureUrl(text) {
-    if (!text) return false;
-    const trimmed = text.trim();
-    const urls = extractUrls(trimmed);
-    if (urls.length === 1) {
-      const remainder = trimmed.replace(urls[0].raw, '').trim();
-      return remainder.length === 0;
-    }
-    return false;
-  }
-
-  function isCodeSnippet(text) {
-    if (!text) return false;
-    const trimmed = text.trim();
-    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-      try { JSON.parse(trimmed); return true; } catch (e) {}
-    }
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      try { JSON.parse(trimmed); return true; } catch (e) {}
-    }
-    const codePatterns = [
-      /^(import|export|const|let|var|function|class|def|from|public|private|if|for|while)\b/m,
-      /[{};()=>]{3,}/,
-      /<(!DOCTYPE|html|div|span|p|script|style|link|body)[^>]*>/i,
-      /\b(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP)\s+.*\s+(FROM|INTO|TABLE|WHERE)\b/i,
-      /^(npm|git|curl|docker|cd|ls|mkdir|chmod|sudo)\s+/m
-    ];
-    return codePatterns.some(p => p.test(trimmed));
-  }
-
-  function analyzePayload(text, files) {
-    const hasText = Boolean(text && text.trim());
-    const hasFiles = Boolean(files && files.length > 0);
-    const urls = hasText ? extractUrls(text.trim()) : [];
-    const isPureLink = hasText && isPureUrl(text);
-    const isCode = hasText && !isPureLink && isCodeSnippet(text);
-
-    let primaryType = 'note';
-    let icon = '📝';
-    let typeLabel = 'Text Note';
-
-    if (isPureLink) {
-      primaryType = 'link';
-      icon = '🔗';
-      typeLabel = 'Web Link';
-    } else if (isCode) {
-      primaryType = 'code';
-      icon = '💻';
-      typeLabel = 'Code Snippet';
-    } else if (hasFiles && !hasText) {
-      const isAllImages = files.every(f => f.type && f.type.startsWith('image/'));
-      if (isAllImages) {
-        primaryType = 'photos';
-        icon = '🖼️';
-        typeLabel = files.length === 1 ? '1 Photo' : `${files.length} Photos`;
-      } else {
-        primaryType = 'files';
-        icon = '📁';
-        typeLabel = files.length === 1 ? '1 File' : `${files.length} Files`;
-      }
-    } else if (hasFiles && hasText) {
-      primaryType = 'mixed';
-      icon = '📦';
-      typeLabel = 'Drop Package';
-    }
-
-    return {
-      hasText,
-      hasFiles,
-      urls,
-      isPureLink,
-      isCode,
-      primaryType,
-      icon,
-      typeLabel,
-      textLength: text ? text.length : 0,
-      wordCount: text ? text.trim().split(/\s+/).filter(Boolean).length : 0,
-      lineCount: text ? text.split(/\r\n|\r|\n/).length : 0,
-      filesCount: files ? files.length : 0,
-      totalFileSize: files ? files.reduce((acc, f) => acc + (f.size || 0), 0) : 0
-    };
-  }
-
-  function formatAutolinkHtml(text) {
-    if (!text) return '';
-    const urls = extractUrls(text);
-    if (urls.length === 0) {
-      return escapeHtml(text);
-    }
-
-    let escaped = escapeHtml(text);
-    for (const u of urls) {
-      const escapedRaw = escapeHtml(u.raw);
-      const linkHtml = `<a href="${escapeHtml(u.href)}" target="_blank" rel="noopener noreferrer" class="vault-inline-link" title="Open in browser">${escapedRaw} <span class="ext-arrow">↗</span></a>`;
-      escaped = escaped.split(escapedRaw).join(linkHtml);
-    }
-    return escaped;
-  }
+  const btnCameraSnap = document.getElementById('btn-camera-snap');
+  let cameraStream = null;
 
   // --- INITIALIZATION ---
   function init() {
     setupTabs();
     setupPinInputs();
+    setupSendForm();
     setupDropzone();
+    setupAdvancedOptions();
     setupCamera();
-    setupActions();
-    setupLiveInputWatcher();
-    setupUpdateModal();
+    setupQrScanner();
+    setupVaultHistory();
+    setupInAppUpdater();
     setupMobileAppBanner();
-    setupServiceWorker();
-    checkDirectPinRoute();
-    checkAppUpdate();
-
-    window.checkAppUpdate = checkAppUpdate;
-    window.displayUpdateModal = displayUpdateModal;
+    setupNativeSendIntent();
+    checkDirectUrlOrActiveDrop();
+    updateHistoryBadge();
   }
 
-  function isStandalonePwa() {
-    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-  }
-
-  // --- SERVICE WORKER (PWA) ---
-  function setupServiceWorker() {
-    if ('serviceWorker' in navigator && !isCapacitorNative()) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then((reg) => {
-            console.log('[PWA] Service Worker registered successfully, scope:', reg.scope);
-          })
-          .catch((err) => {
-            console.warn('[PWA] Service Worker registration failed:', err);
-          });
-      });
-    }
-  }
-
-  // PWA Install Prompt Capture
-  let deferredPwaPrompt = null;
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPwaPrompt = e;
-    const banner = document.getElementById('mobile-app-banner');
-    const bannerBtn = banner?.querySelector('.btn-banner-download');
-    if (banner && bannerBtn && !isCapacitorNative() && !isStandalonePwa()) {
-      banner.classList.remove('hidden');
-      bannerBtn.textContent = 'Install App';
-    }
-  });
-
-  window.addEventListener('appinstalled', () => {
-    deferredPwaPrompt = null;
-    const banner = document.getElementById('mobile-app-banner');
-    if (banner) banner.classList.add('hidden');
-    showToast('Drop App installed!');
-  });
-
-  // --- MOBILE WEB PROMO BANNER ---
-  function setupMobileAppBanner() {
-    const banner = document.getElementById('mobile-app-banner');
-    const btnDismiss = document.getElementById('btn-dismiss-app-banner');
-    const btnAction = banner?.querySelector('.btn-banner-download');
-    if (!banner) return;
-
-    if (isCapacitorNative() || isStandalonePwa()) {
-      banner.classList.add('hidden');
-      return;
-    }
-
-    const dismissed = localStorage.getItem('atmr_app_promo_dismissed') === 'true';
-    if (isMobileWeb() && !dismissed) {
-      banner.classList.remove('hidden');
-    } else {
-      banner.classList.add('hidden');
-    }
-
-    if (btnAction) {
-      btnAction.addEventListener('click', async (e) => {
-        if (deferredPwaPrompt) {
-          e.preventDefault();
-          deferredPwaPrompt.prompt();
-          const { outcome } = await deferredPwaPrompt.userChoice;
-          console.log('[PWA] User choice outcome:', outcome);
-          deferredPwaPrompt = null;
-          if (outcome === 'accepted') {
-            banner.classList.add('hidden');
-          }
-        }
-      });
-    }
-
-    if (btnDismiss) {
-      btnDismiss.addEventListener('click', () => {
-        banner.classList.add('hidden');
-        localStorage.setItem('atmr_app_promo_dismissed', 'true');
-      });
-    }
-  }
-
-  // --- IN-APP UPDATE CHECKER ---
-  async function checkAppUpdate(isManual = false) {
-    if (isManual) {
-      showToast('Checking for updates...', 'info');
-    }
-
-    try {
-      let data = null;
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-        const res = await fetch(getApiUrl('/api/version'), { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (res.ok) data = await res.json();
-      } catch (e) {}
-
-      if (!data || !data.version) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
-          const ghRes = await fetch('https://api.github.com/repos/ATMRaven/atmr-drop/releases/latest', { signal: controller.signal });
-          clearTimeout(timeoutId);
-          if (ghRes.ok) {
-            const ghData = await ghRes.json();
-            const tag = (ghData.tag_name || '').replace(/^v/, '').trim();
-            data = {
-              version: tag,
-              downloadUrl: '/api/apk/latest',
-              fallbackUrl: ghData.assets?.[0]?.browser_download_url || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
-              releaseNotes: ghData.body || 'Latest performance and security improvements.',
-              mandatory: false
-            };
-          }
-        } catch (e) {}
-      }
-
-      if (data && data.version) {
-        const isNew = isNewerVersion(data.version, APP_CURRENT_VERSION);
-        console.log(`[Version Check] Installed: v${APP_CURRENT_VERSION} | Latest: v${data.version} | Update needed: ${isNew}`);
-        if (isNew) {
-          displayUpdateModal(data);
-        } else if (isManual) {
-          showToast(`Drop is up to date (v${APP_CURRENT_VERSION})`, 'success');
-        }
-      } else if (isManual) {
-        // Fallback for manual check if offline or network error
-        displayUpdateModal({
-          version: '1.0.22',
-          downloadUrl: '/api/apk/latest',
-          fallbackUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
-          releaseNotes: '• Real-time in-app direct APK streaming downloader\n• Real-time upload status bar with live speed & byte tracking\n• Instant drop pickup detection & celebratory chime\n• Performance optimizations & background transfer enhancements',
-          mandatory: false
-        });
-      }
-    } catch (err) {
-      console.warn('Update check failed:', err);
-      if (isManual) {
-        showToast('Update check failed. Check connection.', 'error');
-      }
-    }
-  }
-
-  function isNewerVersion(remote, local) {
-    if (!remote || !local) return false;
-    const rClean = remote.replace(/^v/, '').trim();
-    const lClean = local.replace(/^v/, '').trim();
-    if (rClean === lClean) return false;
-
-    const rParts = rClean.split('.').map(n => parseInt(n, 10) || 0);
-    const lParts = lClean.split('.').map(n => parseInt(n, 10) || 0);
-    for (let i = 0; i < Math.max(rParts.length, lParts.length); i++) {
-      const r = rParts[i] || 0;
-      const l = lParts[i] || 0;
-      if (r > l) return true;
-      if (r < l) return false;
-    }
-    return false;
-  }
-
-  async function downloadUpdateInApp(downloadUrl, fallbackUrl, version) {
-    const primaryUrl = downloadUrl ? getApiUrl(downloadUrl) : getApiUrl('/api/apk/latest');
-    const secondaryUrl = fallbackUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
-
-    if (btnUpdateNow) {
-      btnUpdateNow.disabled = true;
-      btnUpdateNow.textContent = '⚡ Downloading Update...';
-    }
-    if (btnUpdateLater) {
-      btnUpdateLater.classList.remove('hidden');
-      btnUpdateLater.textContent = 'Dismiss';
-    }
-
-    if (modalDownloadProgressContainer) {
-      modalDownloadProgressContainer.classList.remove('hidden');
-      if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = '0%';
-      if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = '0%';
-      if (modalDownloadStatusText) modalDownloadStatusText.textContent = `Downloading v${version || 'update'}...`;
-      if (modalDownloadBytesText) modalDownloadBytesText.textContent = 'Connecting to Database...';
-      if (modalDownloadSpeedText) modalDownloadSpeedText.textContent = 'Starting';
-    }
-
-    playChime('copy');
-    showToast('Downloading update directly inside app...', 'info');
-
-    // 1. Native Android Direct In-App Downloader & Installer
-    if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkInstaller) {
-      try {
-        const apkPlugin = window.Capacitor.Plugins.ApkInstaller;
-        
-        if (typeof apkPlugin.addListener === 'function') {
-          await apkPlugin.addListener('downloadProgress', (data) => {
-            const pct = Math.min(100, Math.max(0, data.percent || 0));
-            if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = pct + '%';
-            if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = pct + '%';
-            if (modalDownloadStatusText) modalDownloadStatusText.textContent = `Downloading v${version || 'update'} (${pct}%)`;
-            if (modalDownloadBytesText) {
-              modalDownloadBytesText.textContent = `${formatFileSize(data.loaded)} / ${formatFileSize(data.total || 3890000)}`;
-            }
-            if (modalDownloadSpeedText) {
-              modalDownloadSpeedText.textContent = pct >= 100 ? 'Installing...' : 'High-Speed Stream';
-            }
-          });
-        }
-
-        await apkPlugin.downloadAndInstall({ url: primaryUrl });
-        
-        if (btnUpdateNow) {
-          btnUpdateNow.disabled = false;
-          btnUpdateNow.textContent = '✓ Ready to Install (Tap to Retry)';
-        }
-        if (modalDownloadStatusText) {
-          modalDownloadStatusText.textContent = 'Download Complete! Installer opened.';
-        }
-        if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = '100%';
-        if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = '100%';
-        playChime('success');
-        showToast('Download complete! Follow Android prompt to update.', 'success');
-        return;
-      } catch (nativeErr) {
-        console.warn('Native ApkInstaller plugin error, falling back to JS stream:', nativeErr);
-      }
-    }
-
-    // 2. JavaScript In-App Chunked Streaming Downloader with Progress Bar
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', primaryUrl, true);
-      xhr.responseType = 'blob';
-
-      const startTime = Date.now();
-
-      xhr.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const pct = Math.round((event.loaded / event.total) * 100);
-          if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = pct + '%';
-          if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = pct + '%';
-          if (modalDownloadStatusText) modalDownloadStatusText.textContent = `Downloading v${version || 'update'} (${pct}%)`;
-          if (modalDownloadBytesText) {
-            modalDownloadBytesText.textContent = `${formatFileSize(event.loaded)} / ${formatFileSize(event.total)}`;
-          }
-
-          const elapsedSec = (Date.now() - startTime) / 1000;
-          if (elapsedSec > 0.5) {
-            const speedBytesPerSec = event.loaded / elapsedSec;
-            if (modalDownloadSpeedText) modalDownloadSpeedText.textContent = `${formatFileSize(speedBytesPerSec)}/s`;
-          }
-        } else {
-          if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = '...';
-          if (modalDownloadBytesText) modalDownloadBytesText.textContent = `${formatFileSize(event.loaded)} streamed`;
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300 && xhr.response) {
-          if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = '100%';
-          if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = '100%';
-          if (modalDownloadStatusText) modalDownloadStatusText.textContent = 'Download Complete!';
-          if (modalDownloadSpeedText) modalDownloadSpeedText.textContent = 'Finished';
-
-          const blob = xhr.response;
-          const blobUrl = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = 'atmr-drop.apk';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-
-          if (btnUpdateNow) {
-            btnUpdateNow.disabled = false;
-            btnUpdateNow.textContent = '✓ Saved to Device (Tap to Re-download)';
-          }
-          playChime('success');
-          showToast('Update downloaded! Tap file to install.', 'success');
-        } else {
-          throw new Error('HTTP ' + xhr.status);
-        }
-      };
-
-      xhr.onerror = () => {
-        throw new Error('Network error during download');
-      };
-
-      xhr.send();
-    } catch (err) {
-      console.warn('In-app JS download failed, fallback to secondary URL:', err);
-      window.open(secondaryUrl, '_blank');
-      if (btnUpdateNow) {
-        btnUpdateNow.disabled = false;
-        btnUpdateNow.textContent = 'Download Started';
-      }
-    }
-  }
-
-  function formatReleaseNotes(raw) {
-    if (!raw || typeof raw !== 'string') {
-      return '• Real-time in-app direct APK streaming downloader\n• Real-time upload status bar with speed & byte tracking\n• Instant drop pickup detection & celebratory chime\n• Smart 1-hour expiration cap for files > 1 GB\n• Performance & background transfer enhancements';
-    }
-
-    // If it contains the generic repo header boilerplate, strip it out or provide clean release highlights
-    if (raw.includes('The Daily Drop (atmr-drop) Android App') || raw.includes('Published by') || raw.includes('Seamless Updates')) {
-      const lines = raw.split('\n');
-      const filtered = lines.filter(line => {
-        const trimmed = line.trim();
-        if (!trimmed) return false;
-        if (trimmed.startsWith('#')) return false;
-        if (trimmed.includes('Published by') || trimmed.includes('Web Service') || trimmed.includes('Seamless Updates') || trimmed.includes('Version:')) return false;
-        if (trimmed.includes('Download') && trimmed.includes('.apk')) return false;
-        if (trimmed.includes('Instant cross-device')) return false;
-        return true;
-      });
-
-      if (filtered.length > 0) {
-        return filtered.map(l => l.trim().startsWith('•') || l.trim().startsWith('-') ? l.trim() : `• ${l.trim()}`).join('\n');
-      }
-
-      return '• Real-time in-app direct APK streaming downloader with live progress bar\n• Real-time upload status bar with speed & byte tracking\n• Instant drop pickup detection & celebratory chime\n• Smart 1-hour expiration cap for files > 1 GB\n• Performance & background transfer enhancements';
-    }
-
-    return raw.trim();
-  }
-
-  function displayUpdateModal(info) {
-    isUpdateMandatory = !!info.mandatory;
-    currentRemoteDownloadUrl = info.downloadUrl ? getApiUrl(info.downloadUrl) : getApiUrl('/api/apk/latest');
-    currentRemoteFallbackUrl = info.fallbackUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
-    currentRemoteVersion = info.version || '';
-
-    updateTitle.textContent = `Update Available (v${info.version})`;
-    updateDesc.textContent = info.mandatory
-      ? 'A critical update is required to continue.'
-      : 'A new version of Drop is ready to install.';
-    updateNotesText.textContent = formatReleaseNotes(info.releaseNotes);
-
-    if (modalDownloadProgressContainer) {
-      modalDownloadProgressContainer.classList.add('hidden');
-      if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = '0%';
-      if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = '0%';
-    }
-
-    if (btnUpdateNow) {
-      btnUpdateNow.disabled = false;
-      btnUpdateNow.textContent = 'Update Now';
-    }
-
-    if (info.mandatory) {
-      btnUpdateLater.classList.add('hidden');
-    } else {
-      btnUpdateLater.classList.remove('hidden');
-    }
-
-    updateModal.classList.add('active');
-    playChime('copy');
-  }
-
-  function setupUpdateModal() {
-    if (footerVersionVal) {
-      footerVersionVal.textContent = APP_CURRENT_VERSION;
-    }
-
-    if (btnCheckUpdate) {
-      btnCheckUpdate.addEventListener('click', (e) => {
-        e.preventDefault();
-        checkAppUpdate(true);
-      });
-    }
-
-    if (btnUpdateNow) {
-      btnUpdateNow.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (btnUpdateNow.textContent.includes('Install Ready')) {
-          // If already downloaded, re-trigger
-          if (currentRemoteDownloadUrl) {
-            window.open(currentRemoteDownloadUrl, '_system');
-          }
-          return;
-        }
-        downloadUpdateInApp(currentRemoteDownloadUrl, currentRemoteFallbackUrl, currentRemoteVersion);
-      });
-    }
-
-    btnUpdateLater.addEventListener('click', () => {
-      updateModal.classList.remove('active');
-    });
-
-    updateModalOverlay.addEventListener('click', () => {
-      if (!isUpdateMandatory) {
-        updateModal.classList.remove('active');
-      }
-    });
-
-    // Check updates when app returns to foreground
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && isCapacitorNative()) {
-        checkAppUpdate(false);
-      }
-    });
-
-    window.addEventListener('focus', () => {
-      if (isCapacitorNative()) {
-        checkAppUpdate(false);
-      }
-    });
-
-    window.showAppUpdateModal = displayUpdateModal;
-  }
-
-  // --- TAB NAVIGATION ---
-  function switchTab(mode) {
-    [viewSend, viewReceive, viewShare, viewVault].forEach(v => v.classList.remove('active'));
-
-    if (mode === 'send') {
-      tabSend.classList.add('active');
-      tabReceive.classList.remove('active');
-
-      const active = getActiveSenderDrop();
-      if (active && !isExplicitNewSend) {
-        // User has an active unexpired drop -> restore active share view!
-        activeDropData = active;
-        displayShareScreen(active);
-      } else {
-        viewSend.classList.add('active');
-        updateActiveDropBanner();
-        inputText.focus();
-      }
-    } else if (mode === 'receive') {
-      tabReceive.classList.add('active');
-      tabSend.classList.remove('active');
-      viewReceive.classList.add('active');
-      pinCells[0].focus();
-    } else if (mode === 'share') {
-      tabSend.classList.add('active');
-      tabReceive.classList.remove('active');
-      viewShare.classList.add('active');
-    } else if (mode === 'vault') {
-      viewVault.classList.add('active');
-    }
-  }
-
+  // --- TABS & VIEWS ---
   function setupTabs() {
     tabSend.addEventListener('click', () => switchTab('send'));
     tabReceive.addEventListener('click', () => switchTab('receive'));
   }
 
-  // --- PIN INPUTS ---
+  function switchTab(tab) {
+    if (tab === 'send') {
+      tabSend.classList.add('active');
+      tabReceive.classList.remove('active');
+      if (activeDropData && !isExplicitNewSend) {
+        showView('share');
+      } else {
+        showView('send');
+      }
+    } else {
+      tabReceive.classList.add('active');
+      tabSend.classList.remove('active');
+      showView('receive');
+      setTimeout(() => { if (pinCells[0]) pinCells[0].focus(); }, 100);
+    }
+  }
+
+  function showView(viewName) {
+    [viewSend, viewReceive, viewShare, viewVault].forEach(v => {
+      if (v) v.classList.remove('active');
+    });
+
+    if (viewName === 'send') {
+      viewSend.classList.add('active');
+      updateActiveBanner();
+    } else if (viewName === 'receive') {
+      viewReceive.classList.add('active');
+    } else if (viewName === 'share') {
+      viewShare.classList.add('active');
+    } else if (viewName === 'vault') {
+      viewVault.classList.add('active');
+    }
+  }
+
+  // --- 4-BOX PIN INPUTS & PASTE AUTO-DISTRIBUTION ---
   function setupPinInputs() {
     pinCells.forEach((cell, idx) => {
       cell.addEventListener('input', (e) => {
@@ -960,18 +415,35 @@
         }
       });
 
+      // Flawless 4-Character Alphanumeric Paste Handler
       cell.addEventListener('paste', (e) => {
         e.preventDefault();
-        const paste = (e.clipboardData || window.clipboardData).getData('text').trim().toUpperCase();
-        const digits = paste.replace(/[^A-Z0-9]/g, '').slice(0, 4);
-        if (digits) {
-          digits.split('').forEach((d, i) => {
-            if (pinCells[i]) pinCells[i].value = d;
+        const rawPaste = (e.clipboardData || window.clipboardData).getData('text').trim();
+        
+        // Extract 4-char PIN even if a full URL like https://drop.atmr.workers.dev/A4G4#key=... was pasted
+        let clean = rawPaste.toUpperCase();
+        const urlMatch = clean.match(/\/([A-Z0-9]{4})(?:#|$|\?)/);
+        if (urlMatch) {
+          clean = urlMatch[1];
+        } else {
+          clean = clean.replace(/[^A-Z0-9]/g, '').slice(0, 4);
+        }
+
+        // Check if paste contained E2EE key in hash
+        const keyMatch = rawPaste.match(/#key=([A-Za-z0-9_-]+)/);
+        if (keyMatch) {
+          currentE2EEKeyB64 = keyMatch[1];
+        }
+
+        if (clean) {
+          clean.split('').forEach((char, i) => {
+            if (pinCells[i]) pinCells[i].value = char;
           });
-          if (digits.length === 4) {
-            fetchDropByPin(digits);
-          } else if (pinCells[digits.length]) {
-            pinCells[digits.length].focus();
+          if (clean.length === 4) {
+            pinCells[3].focus();
+            fetchDropByPin(clean);
+          } else if (pinCells[clean.length]) {
+            pinCells[clean.length].focus();
           }
         }
       });
@@ -985,592 +457,787 @@
       }
       fetchDropByPin(pin);
     });
+
+    if (btnScanQr) {
+      btnScanQr.addEventListener('click', openQrScanner);
+    }
   }
 
   function getEnteredPin() {
-    return pinCells.map(c => c.value).join('');
+    return pinCells.map(c => c.value.trim().toUpperCase()).join('');
   }
 
-  // --- LIVE INPUT WATCHER ---
-  function updateLiveInputInfo() {
-    const text = inputText.value;
-    const info = analyzePayload(text, stagedFiles);
+  function clearPinInputs() {
+    pinCells.forEach(c => { c.value = ''; });
+  }
 
-    if (!info.hasText && stagedFiles.length === 0) {
-      liveInputBar.classList.add('hidden');
-      return;
+  // --- CAMERA QR CODE SCANNER ---
+  function setupQrScanner() {
+    if (!qrScannerModal) return;
+
+    if (btnCloseQrScanner) {
+      btnCloseQrScanner.addEventListener('click', closeQrScanner);
+    }
+    if (qrModalOverlay) {
+      qrModalOverlay.addEventListener('click', closeQrScanner);
+    }
+  }
+
+  async function openQrScanner() {
+    qrScannerModal.classList.add('show');
+    qrScannerModal.setAttribute('aria-hidden', 'false');
+    qrStatusHint.textContent = 'Point camera at sender\'s QR code';
+
+    try {
+      qrScannerStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 640 } }
+      });
+      qrVideo.srcObject = qrScannerStream;
+      qrVideo.play();
+      startQrScanningLoop();
+    } catch (err) {
+      qrStatusHint.textContent = 'Camera access denied or unavailable';
+      showToast('Camera permission required to scan QR');
+    }
+  }
+
+  function closeQrScanner() {
+    if (qrScannerAnimId) {
+      cancelAnimationFrame(qrScannerAnimId);
+      qrScannerAnimId = null;
+    }
+    if (qrScannerStream) {
+      qrScannerStream.getTracks().forEach(t => t.stop());
+      qrScannerStream = null;
+    }
+    qrScannerModal.classList.remove('show');
+    qrScannerModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function startQrScanningLoop() {
+    let barcodeDetector = null;
+    if ('BarcodeDetector' in window) {
+      try {
+        barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code'] });
+      } catch (e) {}
     }
 
-    liveInputBar.classList.remove('hidden');
-    liveTagBadge.className = `live-tag-badge ${info.primaryType}`;
-    liveTagBadge.textContent = `${info.icon} ${info.typeLabel}`;
+    const ctx = qrCanvas ? qrCanvas.getContext('2d', { willReadFrequently: true }) : null;
 
-    if (info.isPureLink && info.urls.length > 0) {
-      liveTagDesc.textContent = info.urls[0].domain;
-      liveTagDesc.classList.remove('hidden');
-    } else if (info.hasCode) {
-      liveTagDesc.textContent = 'Code Snippet';
-      liveTagDesc.classList.remove('hidden');
+    async function scan() {
+      if (!qrScannerStream || qrVideo.readyState !== qrVideo.HAVE_ENOUGH_DATA) {
+        qrScannerAnimId = requestAnimationFrame(scan);
+        return;
+      }
+
+      // 1. Try Native BarcodeDetector
+      if (barcodeDetector) {
+        try {
+          const barcodes = await barcodeDetector.detect(qrVideo);
+          if (barcodes && barcodes.length > 0) {
+            handleScannedQrResult(barcodes[0].rawValue);
+            return;
+          }
+        } catch (e) {}
+      }
+
+      // 2. Fallback to embedded jsQR
+      if (ctx && typeof window.jsQR === 'function') {
+        qrCanvas.width = qrVideo.videoWidth;
+        qrCanvas.height = qrVideo.videoHeight;
+        ctx.drawImage(qrVideo, 0, 0, qrCanvas.width, qrCanvas.height);
+        const imageData = ctx.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
+        const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert'
+        });
+        if (code && code.data) {
+          handleScannedQrResult(code.data);
+          return;
+        }
+      }
+
+      qrScannerAnimId = requestAnimationFrame(scan);
+    }
+
+    qrScannerAnimId = requestAnimationFrame(scan);
+  }
+
+  function handleScannedQrResult(qrText) {
+    if (!qrText) return;
+    playChime('copy');
+    closeQrScanner();
+
+    // Parse PIN and E2EE key
+    let pin = '';
+    const urlMatch = qrText.match(/\/([A-Z0-9]{4})(?:#|$|\?)/i);
+    if (urlMatch) {
+      pin = urlMatch[1].toUpperCase();
     } else {
-      liveTagDesc.classList.add('hidden');
+      const clean = qrText.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (clean.length === 4) pin = clean;
     }
 
-    const statParts = [];
-    if (info.wordCount > 0) statParts.push(`${info.wordCount} words`);
-    if (info.charCount > 0) statParts.push(`${info.charCount} chars`);
-    if (stagedFiles.length > 0) statParts.push(`${stagedFiles.length} file${stagedFiles.length > 1 ? 's' : ''}`);
-    liveStats.textContent = statParts.join(' • ');
+    const keyMatch = qrText.match(/#key=([A-Za-z0-9_-]+)/);
+    if (keyMatch) {
+      currentE2EEKeyB64 = keyMatch[1];
+    }
+
+    if (pin && pin.length === 4) {
+      pin.split('').forEach((char, i) => {
+        if (pinCells[i]) pinCells[i].value = char;
+      });
+      showToast(`Scanned PIN: ${pin} 🎯`);
+      fetchDropByPin(pin);
+    } else {
+      showToast('Scanned QR does not contain a valid Drop PIN');
+    }
   }
 
-  function setupLiveInputWatcher() {
-    inputText.addEventListener('input', updateLiveInputInfo);
-    inputText.addEventListener('paste', () => {
-      setTimeout(updateLiveInputInfo, 50);
-    });
+  // --- ADVANCED OPTIONS (CUSTOM 4-CHAR PIN & E2EE) ---
+  function setupAdvancedOptions() {
+    if (btnToggleAdvanced && advancedDrawer) {
+      btnToggleAdvanced.addEventListener('click', () => {
+        const isHidden = advancedDrawer.classList.contains('hidden');
+        advancedDrawer.classList.toggle('hidden', !isHidden);
+        btnToggleAdvanced.classList.toggle('open', isHidden);
+      });
+    }
+
+    if (inputCustomPin) {
+      inputCustomPin.addEventListener('input', (e) => {
+        inputCustomPin.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+      });
+    }
   }
 
-  // --- DROPZONE & CAMERA ---
+  // --- NATIVE ANDROID SHARE SHEET (SendIntent Plugin) ---
+  function setupNativeSendIntent() {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SendIntent) {
+      const SendIntent = window.Capacitor.Plugins.SendIntent;
+
+      // Handle initial shared data on cold startup
+      SendIntent.getSharedData().then(result => {
+        if (result && result.hasData) {
+          processIncomingSendIntent(result);
+        }
+      }).catch(() => {});
+
+      // Handle subsequent shared data when app is already in memory
+      SendIntent.addListener('sendIntentReceived', (data) => {
+        processIncomingSendIntent(data);
+      });
+    }
+  }
+
+  function processIncomingSendIntent(data) {
+    if (!data) return;
+    switchTab('send');
+
+    if (data.type === 'text' && data.text) {
+      inputText.value = data.text;
+      detectLiveInput();
+      showToast('Shared text received from Android Sheet 📥');
+    } else if (data.type === 'files' && Array.isArray(data.files)) {
+      data.files.forEach(f => {
+        const id = 'f_' + Math.random().toString(36).substring(2, 9);
+        let blobOrHandle = null;
+
+        if (f.dataUrl) {
+          // Convert dataURL to Blob
+          const parts = f.dataUrl.split(',');
+          const mime = parts[0].match(/:(.*?);/)[1];
+          const bstr = atob(parts[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) u8arr[n] = bstr.charCodeAt(n);
+          blobOrHandle = new Blob([u8arr], { type: mime });
+        }
+
+        stagedFiles.push({
+          id,
+          name: f.name || 'shared_file',
+          path: '',
+          type: f.type || 'application/octet-stream',
+          size: f.size || (blobOrHandle ? blobOrHandle.size : 0),
+          fileHandle: blobOrHandle || f
+        });
+      });
+
+      renderStagedChips();
+      checkTotalStagedSize();
+      showToast(`Staged ${data.files.length} file(s) from Share Sheet 📥`);
+    }
+  }
+
+  // --- DROPZONE & FOLDER UPLOADS ---
   function setupDropzone() {
-    ['dragenter', 'dragover'].forEach(eventName => {
-      dropzone.addEventListener(eventName, (e) => {
+    dropzone.addEventListener('click', (e) => {
+      if (e.target.closest('#btn-camera') || e.target.closest('#btn-folder-snap')) return;
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', () => {
+      handleFiles(fileInput.files);
+      fileInput.value = '';
+    });
+
+    if (folderInput && btnFolderSnap) {
+      btnFolderSnap.addEventListener('click', (e) => {
+        e.stopPropagation();
+        folderInput.click();
+      });
+
+      folderInput.addEventListener('change', () => {
+        handleFiles(folderInput.files, true);
+        folderInput.value = '';
+      });
+    }
+
+    // Drag & Drop with Recursive Directory Traversal
+    ['dragenter', 'dragover'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
         e.preventDefault();
+        e.stopPropagation();
         dropzone.classList.add('dragover');
       });
     });
 
-    ['dragleave', 'drop'].forEach(eventName => {
-      dropzone.addEventListener(eventName, (e) => {
+    ['dragleave', 'drop'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
         e.preventDefault();
+        e.stopPropagation();
         dropzone.classList.remove('dragover');
       });
     });
 
-    dropzone.addEventListener('drop', (e) => {
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length) handleFiles(files);
-    });
+    dropzone.addEventListener('drop', async (e) => {
+      const items = e.dataTransfer.items;
+      if (items && items.length > 0) {
+        const filesWithPaths = [];
+        const queue = [];
 
-    dropzone.addEventListener('click', (e) => {
-      if (e.target.closest('#btn-camera')) return;
-      fileInput.click();
-    });
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.webkitGetAsEntry) {
+            const entry = item.webkitGetAsEntry();
+            if (entry) queue.push(traverseFileTree(entry, ''));
+          } else if (item.getAsFile) {
+            const f = item.getAsFile();
+            if (f) filesWithPaths.push({ file: f, path: '' });
+          }
+        }
 
-    fileInput.addEventListener('change', (e) => {
-      const files = Array.from(e.target.files);
-      if (files.length) handleFiles(files);
+        const results = await Promise.all(queue);
+        results.flat().forEach(f => filesWithPaths.push(f));
+
+        if (filesWithPaths.length > 0) {
+          handleTraversedFiles(filesWithPaths);
+        }
+      } else if (e.dataTransfer.files) {
+        handleFiles(e.dataTransfer.files);
+      }
     });
   }
 
-  function handleFiles(files) {
-    const totalSize = stagedFiles.reduce((acc, f) => acc + f.size, 0) + files.reduce((acc, f) => acc + f.size, 0);
-    if (totalSize > 10000 * 1024 * 1024) {
-      showToast('Combined files exceed 10 GB maximum limit.');
-      return;
-    }
+  // Recursive Directory Traversal via webkitGetAsEntry
+  async function traverseFileTree(item, path) {
+    if (item.isFile) {
+      return new Promise(resolve => {
+        item.file(file => {
+          resolve([{ file, path: path + file.name }]);
+        });
+      });
+    } else if (item.isDirectory) {
+      const dirReader = item.createReader();
+      const entries = await new Promise(resolve => {
+        const allEntries = [];
+        function read() {
+          dirReader.readEntries(result => {
+            if (result.length === 0) resolve(allEntries);
+            else {
+              allEntries.push(...result);
+              read();
+            }
+          });
+        }
+        read();
+      });
 
-    files.forEach(file => {
+      const subFiles = await Promise.all(
+        entries.map(e => traverseFileTree(e, path + item.name + '/'))
+      );
+      return subFiles.flat();
+    }
+    return [];
+  }
+
+  function handleTraversedFiles(filesWithPaths) {
+    filesWithPaths.forEach(({ file, path }) => {
+      const id = 'f_' + Math.random().toString(36).substring(2, 9);
       stagedFiles.push({
-        id: 'f_' + Math.random().toString(36).substring(2, 9),
+        id,
         name: file.name,
+        path: path || '',
         type: file.type || 'application/octet-stream',
         size: file.size,
         fileHandle: file
       });
     });
-    renderStagedFiles();
-    updateLiveInputInfo();
-    playChime('pop');
+    renderStagedChips();
+    checkTotalStagedSize();
   }
 
-  function renderStagedFiles() {
-    const totalSizeBytes = stagedFiles.reduce((acc, f) => acc + f.size, 0);
+  function handleFiles(fileList, isFolder = false) {
+    Array.from(fileList).forEach(file => {
+      const id = 'f_' + Math.random().toString(36).substring(2, 9);
+      const relativePath = file.webkitRelativePath || '';
+      stagedFiles.push({
+        id,
+        name: file.name,
+        path: relativePath,
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        fileHandle: file
+      });
+    });
+    renderStagedChips();
+    checkTotalStagedSize();
+  }
 
-    // Smart TTL limit for large files (> 1 GB)
-    if (selectTtl) {
-      if (totalSizeBytes > 1024 * 1024 * 1024) {
-        if (ttlLimitNotice) ttlLimitNotice.classList.remove('hidden');
-        Array.from(selectTtl.options).forEach(opt => {
-          if (parseInt(opt.value, 10) > 3600) {
-            opt.disabled = true;
-          }
-        });
-        if (parseInt(selectTtl.value, 10) > 3600) {
-          selectTtl.value = '3600';
-        }
-      } else {
-        if (ttlLimitNotice) ttlLimitNotice.classList.add('hidden');
-        Array.from(selectTtl.options).forEach(opt => {
-          opt.disabled = false;
-        });
-      }
-    }
-
+  function renderStagedChips() {
+    stagedChipsList.innerHTML = '';
     if (stagedFiles.length === 0) {
       stagedChipsList.classList.add('hidden');
-      stagedChipsList.innerHTML = '';
       return;
     }
-
     stagedChipsList.classList.remove('hidden');
-    stagedChipsList.innerHTML = '';
 
-    stagedFiles.forEach((file, index) => {
+    stagedFiles.forEach((f, idx) => {
       const chip = document.createElement('div');
       chip.className = 'staged-chip';
+      const isDir = Boolean(f.path && f.path.includes('/'));
       chip.innerHTML = `
-        <span class="chip-name">${escapeHtml(file.name)}</span>
-        <span class="chip-size">${formatFileSize(file.size)}</span>
-        <button type="button" class="chip-remove" data-index="${index}">&times;</button>
+        <span class="chip-name" title="${escapeHtml(f.path || f.name)}">
+          ${isDir ? '📁 ' : ''}${escapeHtml(f.name)}
+        </span>
+        <span class="chip-size">${formatBytes(f.size)}</span>
+        <button type="button" class="btn-remove-chip" data-idx="${idx}" title="Remove file">&times;</button>
       `;
       stagedChipsList.appendChild(chip);
     });
 
-    stagedChipsList.querySelectorAll('.chip-remove').forEach(btn => {
+    stagedChipsList.querySelectorAll('.btn-remove-chip').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const idx = parseInt(e.target.dataset.index, 10);
+        const idx = parseInt(e.currentTarget.getAttribute('data-idx'), 10);
         stagedFiles.splice(idx, 1);
-        renderStagedFiles();
-        updateLiveInputInfo();
+        renderStagedChips();
+        checkTotalStagedSize();
       });
     });
   }
 
-  function setupCamera() {
-    btnCamera.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        cameraVideo.srcObject = mediaStream;
-        cameraModal.classList.add('active');
-      } catch (err) {
-        showToast('Camera access denied or unavailable.');
+  function checkTotalStagedSize() {
+    const totalBytes = stagedFiles.reduce((acc, f) => acc + (f.size || 0), 0);
+    const ONE_GB = 1024 * 1024 * 1024;
+
+    if (totalBytes >= ONE_GB) {
+      ttlLimitNotice.classList.remove('hidden');
+      if (selectTtl.value === '86400') {
+        selectTtl.value = '3600';
       }
-    });
-
-    btnCameraClose.addEventListener('click', closeCamera);
-
-    btnCameraSnap.addEventListener('click', () => {
-      if (!mediaStream) return;
-      cameraCanvas.width = cameraVideo.videoWidth || 640;
-      cameraCanvas.height = cameraVideo.videoHeight || 480;
-      const ctx = cameraCanvas.getContext('2d');
-      ctx.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
-      const filename = `photo_${Date.now()}.jpg`;
-
-      cameraCanvas.toBlob((blob) => {
-        if (!blob) return;
-        stagedFiles.push({
-          id: 'f_' + Math.random().toString(36).substring(2, 9),
-          name: filename,
-          type: 'image/jpeg',
-          size: blob.size,
-          fileHandle: blob
-        });
-        renderStagedFiles();
-        updateLiveInputInfo();
-      }, 'image/jpeg', 0.85);
-
-      closeCamera();
-      playChime('pop');
-      showToast('Photo captured');
-    });
+      selectTtl.querySelector('option[value="86400"]').disabled = true;
+    } else {
+      ttlLimitNotice.classList.add('hidden');
+      const opt24 = selectTtl.querySelector('option[value="86400"]');
+      if (opt24) opt24.disabled = false;
+    }
   }
 
-  function closeCamera() {
-    if (mediaStream) {
-      mediaStream.getTracks().forEach(track => track.stop());
-      mediaStream = null;
-    }
-    cameraModal.classList.remove('active');
-  }
-
-  // --- SEND & SHARE ACTIONS ---
-  function setupActions() {
-    if (btnBannerView) {
-      btnBannerView.addEventListener('click', () => {
-        const active = getActiveSenderDrop();
-        if (active) {
-          activeDropData = active;
-          displayShareScreen(active);
-        }
-      });
-    }
-
-    if (btnBannerDismiss) {
-      btnBannerDismiss.addEventListener('click', () => {
-        if (activeDropBanner) activeDropBanner.classList.add('hidden');
-      });
-    }
-
-    const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB per chunk
-
-    async function uploadDropWithProgress(params) {
-      const { text, files, ttlSeconds, burnAfterRead } = params;
-      const totalBytes = (files || []).reduce((acc, f) => acc + (f.size || 0), 0) + (text ? text.length : 0);
-      const startTime = performance.now();
-
-      // Show and initialize upload progress container
-      if (uploadProgressContainer) {
-        uploadProgressContainer.classList.remove('hidden');
-        if (uploadProgressBar) uploadProgressBar.style.width = '0%';
-        if (uploadPercentBadge) uploadPercentBadge.textContent = '0%';
-        if (uploadStatusText) {
-          uploadStatusText.textContent = (files && files.length > 0)
-            ? `Initializing wire drop for ${files.length} file${files.length > 1 ? 's' : ''}...`
-            : 'Encrypting & uploading...';
-        }
-        if (uploadBytesText) uploadBytesText.textContent = `0 B / ${formatFileSize(totalBytes || 1024)}`;
-        if (uploadSpeedText) uploadSpeedText.textContent = '0 KB/s';
-      }
-
-      // Step 1: Create metadata manifest
-      const filesManifest = (files || []).map(f => ({
-        id: f.id,
-        name: f.name,
-        type: f.type,
-        size: f.size,
-        chunkCount: Math.ceil(f.size / CHUNK_SIZE) || 1,
-        chunkSize: CHUNK_SIZE,
-      }));
-
-      const metaRes = await fetch(getApiUrl('/api/drop'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          files: filesManifest,
-          ttlSeconds,
-          burnAfterRead
-        })
-      });
-
-      if (!metaRes.ok) {
-        const errJson = await metaRes.json().catch(() => ({}));
-        throw new Error(errJson.error || `Failed to create drop (${metaRes.status})`);
-      }
-
-      const dropData = await metaRes.json();
-      const code = dropData.code;
-
-      // Step 2: Stream each file's binary chunks
-      let uploadedBytesTotal = text ? text.length : 0;
-
-      for (let fIdx = 0; fIdx < (files || []).length; fIdx++) {
-        const fileObj = files[fIdx];
-        const fileBlob = fileObj.fileHandle;
-        const chunkCount = Math.ceil(fileObj.size / CHUNK_SIZE) || 1;
-
-        for (let cIdx = 0; cIdx < chunkCount; cIdx++) {
-          const start = cIdx * CHUNK_SIZE;
-          const end = Math.min(fileObj.size, start + CHUNK_SIZE);
-          const chunkBlob = fileBlob.slice(start, end);
-
-          if (uploadStatusText) {
-            const chunkPartText = chunkCount > 1 ? ` (part ${cIdx + 1}/${chunkCount})` : '';
-            uploadStatusText.textContent = `Uploading ${fileObj.name}${chunkPartText}...`;
-          }
-
-          await new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            let chunkPrevLoaded = 0;
-
-            xhr.upload.onprogress = (event) => {
-              if (event.lengthComputable) {
-                const diff = event.loaded - chunkPrevLoaded;
-                chunkPrevLoaded = event.loaded;
-                uploadedBytesTotal += diff;
-
-                const percent = Math.min(99, Math.round((uploadedBytesTotal / Math.max(1, totalBytes)) * 100));
-                if (uploadProgressBar) uploadProgressBar.style.width = `${percent}%`;
-                if (uploadPercentBadge) uploadPercentBadge.textContent = `${percent}%`;
-
-                const elapsedSec = (performance.now() - startTime) / 1000;
-                const speed = elapsedSec > 0 ? uploadedBytesTotal / elapsedSec : 0;
-                if (uploadBytesText) uploadBytesText.textContent = `${formatFileSize(uploadedBytesTotal)} / ${formatFileSize(totalBytes)}`;
-                if (uploadSpeedText) uploadSpeedText.textContent = `${formatFileSize(speed)}/s`;
-              }
-            };
-
-            xhr.onload = () => {
-              if (xhr.status >= 200 && xhr.status < 300) {
-                resolve();
-              } else {
-                reject(new Error(`Chunk upload failed with status ${xhr.status}`));
-              }
-            };
-
-            xhr.onerror = () => reject(new Error('Network error during file chunk upload'));
-            xhr.ontimeout = () => reject(new Error('Chunk upload timed out'));
-
-            xhr.open('PUT', getApiUrl(`/api/drop/${code}/file/${fileObj.id}/chunk/${cIdx}`));
-            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-            xhr.send(chunkBlob);
-          });
-        }
-      }
-
-      if (uploadProgressContainer) {
-        if (uploadProgressBar) uploadProgressBar.style.width = '100%';
-        if (uploadPercentBadge) uploadPercentBadge.textContent = '100%';
-        if (uploadStatusText) uploadStatusText.textContent = 'Drop ready!';
-      }
-
-      return dropData;
-    }
+  // --- SEND FORM SUBMISSION & RESUMABLE CHUNK STREAMING ---
+  function setupSendForm() {
+    inputText.addEventListener('input', detectLiveInput);
 
     btnSendDrop.addEventListener('click', async () => {
       const text = inputText.value.trim();
       if (!text && stagedFiles.length === 0) {
-        showToast('Please enter text or attach a file');
+        showToast('Please add text or select files');
         return;
       }
 
       btnSendDrop.disabled = true;
-      btnSendDrop.querySelector('.btn-text').textContent = 'Creating Drop...';
+      btnSendDrop.querySelector('.btn-text').textContent = 'Preparing Drop...';
 
       try {
-        const ttlSec = parseInt(selectTtl.value, 10) || 900;
-        const payload = {
-          text: text || undefined,
-          files: stagedFiles,
-          ttlSeconds: ttlSec,
-          burnAfterRead: checkBurn.checked
-        };
+        let isEncrypted = checkE2EE ? checkE2EE.checked : false;
+        let e2eeKey = null;
+        let e2eeKeyB64 = null;
 
-        const data = await uploadDropWithProgress(payload);
-
-        if (!data || !data.success) throw new Error(data?.error || 'Failed to create drop');
-
-        // Store active drop session
-        const dropSession = {
-          ...data,
-          text: text || data.text || '',
-          files: data.files || stagedFiles || [],
-          expiresAt: data.expiresAt || (Date.now() + ttlSec * 1000),
-          ttl: ttlSec,
-          burnAfterRead: checkBurn.checked
-        };
-
-        saveActiveSenderDrop(dropSession);
-        displayShareScreen(dropSession);
-        playChime('success');
-        showToast('Drop created!');
-      } catch (err) {
-        showToast(err.message || 'Failed to send drop');
-      } finally {
-        if (uploadProgressContainer) {
-          uploadProgressContainer.classList.add('hidden');
+        if (isEncrypted) {
+          e2eeKey = await CryptoEngine.generateKey();
+          e2eeKeyB64 = await CryptoEngine.exportKeyB64(e2eeKey);
+          currentE2EEKey = e2eeKey;
+          currentE2EEKeyB64 = e2eeKeyB64;
         }
+
+        const customPin = inputCustomPin ? inputCustomPin.value.trim().toUpperCase() : '';
+        const ttlSeconds = parseInt(selectTtl.value, 10);
+        const burnAfterRead = checkBurn.checked;
+
+        // Process files manifest
+        const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB per chunk
+        const manifestFiles = [];
+
+        for (const file of stagedFiles) {
+          const chunkCount = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+          manifestFiles.push({
+            id: file.id,
+            name: file.name,
+            path: file.path || '',
+            type: file.type,
+            size: file.size,
+            chunkCount,
+            chunkSize: CHUNK_SIZE
+          });
+        }
+
+        // Encrypt text note if E2EE
+        let processedText = text;
+        if (text && isEncrypted && e2eeKey) {
+          processedText = await CryptoEngine.encryptText(text, e2eeKey);
+        }
+
+        // Step 1: POST metadata manifest
+        const payload = {
+          customPin: customPin || undefined,
+          text: processedText || undefined,
+          textType: detectTextType(text),
+          ttlSeconds,
+          burnAfterRead,
+          isEncrypted,
+          files: manifestFiles
+        };
+
+        const res = await fetch('/api/drop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Failed to create drop');
+        }
+
+        // Step 2: Stream binary chunks if files are present
+        if (stagedFiles.length > 0) {
+          await uploadFileChunksWithProgress(data.code, stagedFiles, CHUNK_SIZE, e2eeKey);
+        }
+
+        playChime('success');
+        activeDropData = data;
+        isExplicitNewSend = false;
+
+        // Embed E2EE key in URL hash fragment
+        if (isEncrypted && e2eeKeyB64) {
+          data.directUrl += `#key=${e2eeKeyB64}`;
+          data.e2eeKeyB64 = e2eeKeyB64;
+        }
+
+        // Persist sender state and add to Vault History
+        localStorage.setItem(SENDER_STORAGE_KEY, JSON.stringify(data));
+        addDropToVaultHistory({
+          code: data.code,
+          createdAt: Date.now(),
+          expiresAt: data.expiresAt,
+          ttlSeconds: data.ttlSeconds,
+          burnAfterRead: data.burnAfterRead,
+          isEncrypted,
+          e2eeKeyB64,
+          direction: 'sent',
+          title: text ? text.slice(0, 40) : `${stagedFiles.length} file(s)`,
+          fileCount: stagedFiles.length,
+          status: 'active'
+        });
+
+        renderShareScreen(data);
+        showView('share');
+        showToast(`Drop #${data.code} created! 🚀`);
+
+        // Start WebRTC P2P listener & pickup watcher
+        initWebRTCSender(data.code);
+        startPickupWatcher(data.code);
+
+      } catch (err) {
+        showToast(err.message || 'Error creating drop');
+        uploadProgressContainer.classList.add('hidden');
+      } finally {
         btnSendDrop.disabled = false;
         btnSendDrop.querySelector('.btn-text').textContent = 'Create Drop';
       }
     });
+  }
 
-    btnCopyPin.addEventListener('click', () => {
-      if (activeDropData && activeDropData.code) {
-        navigator.clipboard.writeText(activeDropData.code);
-        playChime('copy');
-        showToast(`PIN ${activeDropData.code} copied!`);
+  // Multi-Part Chunk Upload with Real-Time Speed & Resume capability
+  async function uploadFileChunksWithProgress(code, files, chunkSize, e2eeKey) {
+    uploadProgressContainer.classList.remove('hidden');
+    uploadProgressBar.style.width = '0%';
+    uploadPercentBadge.textContent = '0%';
+
+    const totalBytes = files.reduce((acc, f) => acc + f.size, 0);
+    let bytesUploadedAcrossFiles = 0;
+    const startTime = Date.now();
+
+    for (let fIdx = 0; fIdx < files.length; fIdx++) {
+      const file = files[fIdx];
+      const chunkCount = Math.max(1, Math.ceil(file.size / chunkSize));
+
+      for (let cIdx = 0; cIdx < chunkCount; cIdx++) {
+        const start = cIdx * chunkSize;
+        const end = Math.min(file.size, start + chunkSize);
+        let chunkBlob = file.fileHandle.slice(start, end);
+
+        // Encrypt chunk if E2EE
+        if (e2eeKey) {
+          const buffer = await chunkBlob.arrayBuffer();
+          const encrypted = await CryptoEngine.encryptBytes(buffer, e2eeKey);
+          chunkBlob = new Blob([encrypted], { type: 'application/octet-stream' });
+        }
+
+        uploadStatusText.textContent = `Uploading ${file.name} (Chunk ${cIdx + 1}/${chunkCount})...`;
+
+        await uploadSingleChunkXHR(code, file.id, cIdx, chunkBlob, (chunkLoaded) => {
+          const currentTotal = bytesUploadedAcrossFiles + chunkLoaded;
+          const pct = Math.min(99, Math.round((currentTotal / (totalBytes || 1)) * 100));
+          uploadProgressBar.style.width = pct + '%';
+          uploadPercentBadge.textContent = pct + '%';
+
+          uploadBytesText.textContent = `${formatBytes(currentTotal)} / ${formatBytes(totalBytes)}`;
+          const elapsedSec = (Date.now() - startTime) / 1000;
+          if (elapsedSec > 0.3) {
+            const speed = currentTotal / elapsedSec;
+            uploadSpeedText.textContent = `${formatBytes(speed)}/s`;
+          }
+        });
+
+        bytesUploadedAcrossFiles += (end - start);
       }
-    });
+    }
 
-    btnCopyUrl.addEventListener('click', () => {
-      if (shareDirectUrl.value) {
-        navigator.clipboard.writeText(shareDirectUrl.value);
-        playChime('copy');
-        showToast('Link copied to clipboard');
-      }
-    });
+    uploadProgressBar.style.width = '100%';
+    uploadPercentBadge.textContent = '100%';
+    uploadStatusText.textContent = 'Upload complete!';
+    setTimeout(() => { uploadProgressContainer.classList.add('hidden'); }, 800);
+  }
 
-    btnCancelDrop.addEventListener('click', async () => {
-      stopPickupWatcher();
-      if (activeDropData && activeDropData.code) {
-        try {
-          await fetch(getApiUrl(`/api/drop/${activeDropData.code}`), { method: 'DELETE' });
-          showToast('Drop deleted');
-        } catch (e) {}
-      }
-      clearActiveSenderDrop();
-      resetForm();
-      switchTab('send');
-    });
+  function uploadSingleChunkXHR(code, fileId, chunkIndex, blob, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', `/api/drop/${code}/file/${fileId}/chunk/${chunkIndex}`, true);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
 
-    btnNewSend.addEventListener('click', () => {
-      stopPickupWatcher();
-      isExplicitNewSend = true;
-      clearActiveSenderDrop();
-      resetForm();
-      switchTab('send');
-      isExplicitNewSend = false;
-    });
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(e.loaded);
+        }
+      };
 
-    btnCopyReceivedText.addEventListener('click', () => {
-      const txt = receivedTextContent.textContent;
-      if (txt) {
-        navigator.clipboard.writeText(txt);
-        playChime('copy');
-        showToast('Text copied');
-      }
-    });
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(xhr.response);
+        } else {
+          reject(new Error(`Chunk upload failed with status ${xhr.status}`));
+        }
+      };
 
-    btnDownloadAllZip.addEventListener('click', downloadZip);
-
-    btnReceiveAnother.addEventListener('click', () => {
-      pinCells.forEach(c => c.value = '');
-      switchTab('receive');
-    });
-
-    // Delegate click on individual file download buttons
-    document.addEventListener('click', async (e) => {
-      const btn = e.target.closest('.btn-download-file');
-      if (!btn) return;
-      e.preventDefault();
-      const code = btn.dataset.code;
-      const fileId = btn.dataset.id;
-      const fileName = btn.dataset.name || 'download';
-      await downloadSingleFile(code, fileId, fileName, btn);
+      xhr.onerror = () => reject(new Error('Network error uploading chunk'));
+      xhr.send(blob);
     });
   }
 
-  // --- REAL-TIME DROP PICKUP WATCHER ---
-  let pickupPollTimer = null;
-  let hasNotifiedPickup = false;
+  // --- WEBRTC P2P DIRECT LAN ACCELERATOR ("ZERO CLOUD" MODE) ---
+  const rtcConfig = {
+    iceServers: [
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      { urls: 'stun:stun.l.google.com:19302' }
+    ]
+  };
 
-  function stopPickupWatcher() {
-    if (pickupPollTimer) {
-      clearInterval(pickupPollTimer);
-      pickupPollTimer = null;
-    }
+  function initWebRTCSender(code) {
+    if (!window.RTCPeerConnection) return;
+    try {
+      activePeerConnection = new RTCPeerConnection(rtcConfig);
+      activeDataChannel = activePeerConnection.createDataChannel('atmr_p2p_channel');
+
+      activeDataChannel.onopen = () => {
+        isP2PConnected = true;
+        shareP2pBadge.classList.remove('hidden');
+        shareP2pText.textContent = '⚡ Direct P2P Connected (100 MB/s)';
+        showToast('Direct P2P LAN Channel Established! ⚡');
+      };
+
+      activePeerConnection.onicecandidate = (e) => {
+        if (e.candidate) {
+          sendWebRTCSignal(code, 'sender', 'candidate', e.candidate);
+        }
+      };
+
+      // Listen for incoming offers from receiver
+      pollWebRTCSignals(code, 'sender', async (signal) => {
+        if (signal.type === 'offer') {
+          if (activePeerConnection && activePeerConnection.signalingState === 'stable') {
+            try {
+              await activePeerConnection.setRemoteDescription(new RTCSessionDescription(signal.payload));
+              const answer = await activePeerConnection.createAnswer();
+              await activePeerConnection.setLocalDescription(answer);
+              await sendWebRTCSignal(code, 'sender', 'answer', answer);
+            } catch (e) {}
+          }
+        } else if (signal.type === 'candidate' && signal.payload) {
+          try {
+            await activePeerConnection.addIceCandidate(new RTCIceCandidate(signal.payload));
+          } catch (e) {}
+        }
+      });
+    } catch (e) {}
   }
 
-  function startPickupWatcher(code) {
-    stopPickupWatcher();
-    hasNotifiedPickup = false;
+  async function initWebRTCReceiver(code) {
+    if (!window.RTCPeerConnection) return;
+    try {
+      activePeerConnection = new RTCPeerConnection(rtcConfig);
 
-    // Request notification permission if not yet decided
-    if ('Notification' in window && Notification.permission === 'default') {
+      activePeerConnection.ondatachannel = (e) => {
+        activeDataChannel = e.channel;
+        activeDataChannel.onopen = () => {
+          isP2PConnected = true;
+          vaultP2pBadge.classList.remove('hidden');
+          showToast('Direct P2P LAN Connected! ⚡');
+        };
+      };
+
+      activePeerConnection.onicecandidate = (e) => {
+        if (e.candidate) {
+          sendWebRTCSignal(code, 'receiver', 'candidate', e.candidate);
+        }
+      };
+
+      const offer = await activePeerConnection.createOffer();
+      await activePeerConnection.setLocalDescription(offer);
+      await sendWebRTCSignal(code, 'receiver', 'offer', offer);
+
+      // Poll for answer
+      pollWebRTCSignals(code, 'receiver', async (signal) => {
+        if (signal.type === 'answer') {
+          if (activePeerConnection && activePeerConnection.signalingState === 'have-local-offer') {
+            try {
+              await activePeerConnection.setRemoteDescription(new RTCSessionDescription(signal.payload));
+            } catch (e) {}
+          }
+        } else if (signal.type === 'candidate' && signal.payload) {
+          try {
+            await activePeerConnection.addIceCandidate(new RTCIceCandidate(signal.payload));
+          } catch (e) {}
+        }
+      });
+    } catch (e) {}
+  }
+
+  async function sendWebRTCSignal(code, from, type, payload) {
+    try {
+      await fetch(`/api/webrtc/${code}/signal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, type, payload })
+      });
+    } catch (e) {}
+  }
+
+  function pollWebRTCSignals(code, forPeer, onSignal) {
+    let active = true;
+    const interval = setInterval(async () => {
+      if (!active) return;
       try {
-        Notification.requestPermission().catch(() => {});
-      } catch (e) {}
-    }
-
-    console.log('[PickupWatcher] Starting watcher for code:', code);
-    pickupPollTimer = setInterval(async () => {
-      if (!code || hasNotifiedPickup) {
-        stopPickupWatcher();
-        return;
-      }
-      try {
-        const fetchUrl = getApiUrl(`/api/drop/${code}?peek=true`);
-        const res = await fetch(fetchUrl);
-        if (!res.ok) return;
-        const data = await res.json();
-        console.log('[PickupWatcher] Poll result:', JSON.stringify(data));
-        if (data && data.success && data.drop) {
-          if (data.drop.pickedUp || (data.drop.retrievedCount && data.drop.retrievedCount > 0) || data.drop.pickedUpAt) {
-            hasNotifiedPickup = true;
-            stopPickupWatcher();
-
-            // Play celebratory success chime
-            playChime('success');
-
-            // Show celebratory banner
-            if (sharePickupBanner) {
-              sharePickupBanner.classList.remove('hidden');
-            }
-            if (shareStatusText) {
-              shareStatusText.textContent = 'Drop Picked Up! ✓';
-            }
-            if (shareStatusDot) {
-              shareStatusDot.style.background = '#34d399';
-              shareStatusDot.style.boxShadow = '0 0 10px #34d399';
-            }
-
-            showToast(`Drop #${code} was picked up! 🎉`);
-
-            // Native push notification if supported & permitted
-            if ('Notification' in window && Notification.permission === 'granted') {
-              try {
-                new Notification('Drop Picked Up! 🎉', {
-                  body: `PIN #${code} was just opened and retrieved on another device.`,
-                  icon: '/icons/icon-192.png'
-                });
-              } catch (notifErr) {}
+        const res = await fetch(`/api/webrtc/${code}/signal?for=${forPeer}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.signals && data.signals.length > 0) {
+            for (const sig of data.signals) {
+              onSignal(sig);
             }
           }
         }
-      } catch (e) {
-        console.warn('[PickupWatcher] Poll error:', e);
-      }
-    }, 2000);
+      } catch (e) {}
+    }, 1500);
+
+    setTimeout(() => { clearInterval(interval); active = false; }, 45000);
   }
 
-  function displayShareScreen(data) {
-    sharePinCode.textContent = data.code;
-    const directUrl = data.directUrl || (isCapacitorNative() ? `${PROD_API_ORIGIN}/${data.code}` : `${window.location.origin}/${data.code}`);
-    shareDirectUrl.value = directUrl;
+  // --- RETRIEVE DROP & ZERO-KNOWLEDGE DECRYPTION ---
+  async function fetchDropByPin(pin) {
+    btnFetchDrop.disabled = true;
+    btnFetchDrop.textContent = 'Decrypting...';
 
-    renderQr(directUrl);
+    try {
+      const res = await fetch(`/api/drop/${pin}`);
+      const data = await res.json();
 
-    // Setup Pickup Status Banner
-    if (sharePickupBanner) {
-      if (data.pickedUp || (data.retrievedCount && data.retrievedCount > 0) || data.pickedUpAt) {
-        sharePickupBanner.classList.remove('hidden');
-        if (shareStatusText) shareStatusText.textContent = 'Drop Picked Up! ✓';
-        if (shareStatusDot) {
-          shareStatusDot.style.background = '#34d399';
-          shareStatusDot.style.boxShadow = '0 0 10px #34d399';
-        }
-      } else {
-        sharePickupBanner.classList.add('hidden');
-        if (shareStatusText) shareStatusText.textContent = 'Ready to receive';
-        if (shareStatusDot) {
-          shareStatusDot.style.background = '';
-          shareStatusDot.style.boxShadow = '';
-        }
-        startPickupWatcher(data.code);
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Drop not found or expired');
       }
-    }
 
-    // Render Payload Overview / Summary
-    const text = data.text || '';
-    const files = data.files || [];
-    const info = analyzePayload(text, files);
+      playChime('success');
+      clearPinInputs();
 
-    sharePayloadBadge.className = `payload-badge ${info.primaryType}`;
-    shareBadgeIcon.textContent = info.icon;
-    shareBadgeText.textContent = info.typeLabel;
+      // Check for E2EE key in URL hash or prompt
+      let e2eeKey = null;
+      if (data.drop.isEncrypted) {
+        const hashKey = window.location.hash.match(/#key=([A-Za-z0-9_-]+)/);
+        const keyB64 = currentE2EEKeyB64 || (hashKey ? hashKey[1] : null);
+        if (keyB64) {
+          e2eeKey = await CryptoEngine.importKeyB64(keyB64);
+        }
+      }
 
-    if (info.isPureLink && info.urls.length > 0) {
-      sharePayloadStat.textContent = '1 URL';
-      shareLinkBox.classList.remove('hidden');
-      shareTextBox.classList.add('hidden');
-      shareLinkDomain.textContent = info.urls[0].domain;
-      shareLinkUrl.textContent = info.urls[0].href;
-      shareLinkOpenBtn.href = info.urls[0].href;
-    } else if (info.hasText) {
-      sharePayloadStat.textContent = `${info.wordCount} words`;
-      shareLinkBox.classList.add('hidden');
-      shareTextBox.classList.remove('hidden');
-      shareTextSnippet.textContent = text.length > 220 ? text.slice(0, 220) + '…' : text;
-    } else {
-      sharePayloadStat.textContent = `${info.filesCount} file${info.filesCount > 1 ? 's' : ''}`;
-      shareLinkBox.classList.add('hidden');
-      shareTextBox.classList.add('hidden');
-    }
+      // Decrypt text if E2EE
+      if (data.drop.isEncrypted && data.drop.text && e2eeKey) {
+        try {
+          data.drop.text = await CryptoEngine.decryptText(data.drop.text, e2eeKey);
+        } catch (e) {}
+      }
 
-    if (files.length > 0) {
-      shareFilesBox.classList.remove('hidden');
-      shareFilesChips.innerHTML = '';
-      files.forEach(f => {
-        const chip = document.createElement('span');
-        chip.className = 'file-chip';
-        chip.innerHTML = `<span class="chip-name">${escapeHtml(f.name)}</span> <span class="chip-size">${formatFileSize(f.size)}</span>`;
-        shareFilesChips.appendChild(chip);
+      // Add to Vault History
+      addDropToVaultHistory({
+        code: data.drop.code,
+        createdAt: data.drop.createdAt || Date.now(),
+        expiresAt: data.drop.expiresAt,
+        ttlSeconds: data.drop.ttlSeconds,
+        burnAfterRead: data.drop.burnAfterRead,
+        isEncrypted: data.drop.isEncrypted,
+        direction: 'received',
+        title: data.drop.text ? data.drop.text.slice(0, 40) : `${data.drop.files?.length || 0} file(s)`,
+        fileCount: data.drop.files?.length || 0,
+        status: data.drop.burnAfterRead ? 'burned' : 'active'
       });
-    } else {
-      shareFilesBox.classList.add('hidden');
+
+      renderVaultScreen(data.drop, e2eeKey);
+      showView('vault');
+      showToast(`Drop #${data.drop.code} decrypted! 🔓`);
+
+      // Try WebRTC P2P connection to sender if active
+      initWebRTCReceiver(data.drop.code);
+
+    } catch (err) {
+      showToast(err.message || 'Failed to retrieve drop');
+    } finally {
+      btnFetchDrop.disabled = false;
+      btnFetchDrop.textContent = 'Retrieve Drop';
     }
+  }
+
+  // --- SHARE SCREEN RENDERING ---
+  function renderShareScreen(data) {
+    sharePinCode.textContent = data.code;
+    shareDirectUrl.value = data.directUrl;
 
     if (data.burnAfterRead) {
       shareBurnBadge.classList.remove('hidden');
@@ -1578,118 +1245,122 @@
       shareBurnBadge.classList.add('hidden');
     }
 
-    startExpiryCountdown(data.expiresAt, shareTimeLeft);
-    switchTab('share');
-  }
-
-  function renderQr(url) {
-    shareQrCanvas.innerHTML = '';
-    try {
-      if (typeof qrcode !== 'undefined') {
-        const qr = qrcode(0, 'M');
-        qr.addData(url);
-        qr.make();
-        shareQrCanvas.innerHTML = qr.createImgTag(4, 6);
-      }
-    } catch (e) {
-      shareQrCanvas.innerHTML = `<div style="padding:10px;font-size:12px;">${url}</div>`;
+    if (data.isEncrypted) {
+      shareE2eeBadge.classList.remove('hidden');
+    } else {
+      shareE2eeBadge.classList.add('hidden');
     }
-  }
 
-  // --- RETRIEVE DROP ---
-  async function fetchDropByPin(code) {
-    btnFetchDrop.disabled = true;
-    showToast(`Loading PIN ${code}...`);
-
-    try {
-      const res = await fetch(getApiUrl(`/api/drop/${code}`));
-      let data;
-      try {
-        data = await res.json();
-      } catch (jsonErr) {
-        throw new Error('Invalid server response');
-      }
-
-      if (!data || !data.success) throw new Error(data?.error || 'Drop not found or expired');
-
-      displayVaultScreen(data.drop);
-      showToast('Drop retrieved!');
-    } catch (err) {
-      showToast(err.message || 'Retrieval failed');
-      pinCells.forEach(c => c.value = '');
-      pinCells[0].focus();
-    } finally {
-      btnFetchDrop.disabled = false;
+    // Generate QR Code
+    if (shareQrcodeCanvas && typeof window.QRCode === 'function') {
+      shareQrcodeCanvas.innerHTML = '';
+      new window.QRCode(shareQrcodeCanvas, {
+        text: data.directUrl,
+        width: 170,
+        height: 170,
+        colorDark: '#ffffff',
+        colorLight: '#0b0e14',
+        correctLevel: window.QRCode.CorrectLevel.M
+      });
     }
+
+    // Start Countdown
+    startCountdown(data.expiresAt, shareTimeLeft, () => {
+      shareStatusText.textContent = 'Expired';
+      shareStatusDot.style.background = '#ef4444';
+      showToast(`Drop #${data.code} has expired`);
+    });
+
+    btnCopyPin.onclick = () => {
+      navigator.clipboard.writeText(data.code);
+      playChime('copy');
+      showToast(`PIN ${data.code} copied! 📋`);
+    };
+
+    btnCopyUrl.onclick = () => {
+      navigator.clipboard.writeText(data.directUrl);
+      playChime('copy');
+      showToast('Direct link copied! 🔗');
+    };
+
+    btnCancelDrop.onclick = async () => {
+      if (confirm(`Revoke and immediately delete drop #${data.code}?`)) {
+        await fetch(`/api/drop/${data.code}`, { method: 'DELETE' });
+        localStorage.removeItem(SENDER_STORAGE_KEY);
+        activeDropData = null;
+        updateVaultHistoryStatus(data.code, 'burned');
+        showToast(`Drop #${data.code} revoked`);
+        switchTab('send');
+      }
+    };
+
+    btnNewSend.onclick = () => {
+      isExplicitNewSend = true;
+      stagedFiles = [];
+      inputText.value = '';
+      renderStagedChips();
+      detectLiveInput();
+      showView('send');
+    };
   }
 
-  function displayVaultScreen(drop) {
-    activeDropData = drop;
-
-    startExpiryCountdown(drop.expiresAt, receiveExpiryText);
+  // --- VAULT SCREEN RENDERING ---
+  function renderVaultScreen(drop, e2eeKey) {
     if (drop.burnAfterRead) {
       receiveBurnNotice.classList.remove('hidden');
     } else {
       receiveBurnNotice.classList.add('hidden');
     }
 
-    const text = drop.text || '';
-    const files = drop.files || [];
-    const info = analyzePayload(text, files);
+    if (drop.isEncrypted) {
+      vaultE2eeBadge.classList.remove('hidden');
+    } else {
+      vaultE2eeBadge.classList.add('hidden');
+    }
 
-    // Direct Link Hero vs Text Note
-    if (info.isPureLink && info.urls.length > 0) {
-      const u = info.urls[0];
-      receivedLinkHero.classList.remove('hidden');
-      receivedTextContainer.classList.add('hidden');
-
-      vaultLinkDomain.textContent = u.domain;
-      vaultLinkUrl.textContent = u.href;
-      vaultLinkOpenBtn.href = u.href;
-
-      vaultLinkCopyBtn.onclick = () => {
-        navigator.clipboard.writeText(u.href);
-        playChime('copy');
-        showToast('Link copied to clipboard');
-      };
-    } else if (info.hasText) {
-      receivedLinkHero.classList.add('hidden');
+    // Text & Links
+    if (drop.text) {
       receivedTextContainer.classList.remove('hidden');
-
-      if (info.urls.length > 0) {
+      receivedTextContent.textContent = drop.text;
+      const urls = extractUrls(drop.text);
+      if (urls.length > 0) {
         btnOpenReceivedLink.classList.remove('hidden');
-        btnOpenReceivedLink.href = info.urls[0].href;
+        btnOpenReceivedLink.href = urls[0];
         receivedTextBadge.classList.remove('hidden');
-        receivedTextBadge.textContent = `🔗 ${info.urls.length} Link${info.urls.length > 1 ? 's' : ''}`;
-        receivedTextContent.innerHTML = formatAutolinkHtml(text);
       } else {
         btnOpenReceivedLink.classList.add('hidden');
         receivedTextBadge.classList.add('hidden');
-        receivedTextContent.textContent = text;
       }
+
+      btnCopyReceivedText.onclick = () => {
+        navigator.clipboard.writeText(drop.text);
+        playChime('copy');
+        showToast('Text copied to clipboard! 📋');
+      };
     } else {
-      receivedLinkHero.classList.add('hidden');
       receivedTextContainer.classList.add('hidden');
     }
 
+    // Photos & Files
+    const files = drop.files || [];
     const images = files.filter(f => f.type && f.type.startsWith('image/'));
     const nonImages = files.filter(f => !f.type || !f.type.startsWith('image/'));
 
-    // Images
+    // Images Grid
     if (images.length > 0) {
       receivedImagesContainer.classList.remove('hidden');
       imagesCount.textContent = images.length;
       receivedImagesGrid.innerHTML = '';
 
       images.forEach(img => {
-        const fileUrl = img.dataBase64 || getApiUrl(`/api/file/${drop.code}/${img.id}`);
         const item = document.createElement('div');
         item.className = 'gallery-item';
+        const fileUrl = `/api/file/${drop.code}/${img.id}`;
         item.innerHTML = `
-          <img src="${fileUrl}" class="gallery-img" alt="${escapeHtml(img.name)}" loading="lazy">
-          <div class="gallery-item-footer">
-            <span class="gallery-item-name" title="${escapeHtml(img.name)}">${escapeHtml(img.name)}</span>
-            <button type="button" class="btn-ghost sm btn-download-file" data-code="${drop.code}" data-id="${img.id}" data-name="${escapeHtml(img.name)}">Save</button>
+          <img src="${fileUrl}" alt="${escapeHtml(img.name)}" loading="lazy">
+          <div class="gallery-overlay">
+            <span class="gallery-name">${escapeHtml(img.name)}</span>
+            <a href="${fileUrl}?download=true" class="gallery-save" download="${escapeHtml(img.name)}">Save</a>
           </div>
         `;
         receivedImagesGrid.appendChild(item);
@@ -1698,7 +1369,7 @@
       receivedImagesContainer.classList.add('hidden');
     }
 
-    // Files
+    // Files List (Preserves Directory Structure)
     if (nonImages.length > 0) {
       receivedFilesContainer.classList.remove('hidden');
       filesCount.textContent = nonImages.length;
@@ -1707,161 +1378,337 @@
       nonImages.forEach(file => {
         const row = document.createElement('div');
         row.className = 'file-row';
+        const isDir = Boolean(file.path && file.path.includes('/'));
+        const fileUrl = `/api/file/${drop.code}/${file.id}?download=true`;
+
         row.innerHTML = `
-          <div class="file-row-info">
-            <span class="file-row-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
-            <span class="file-row-meta">${formatFileSize(file.size)}</span>
+          <div class="file-row-left">
+            <span class="file-icon">${isDir ? '📁' : '📄'}</span>
+            <div class="file-info">
+              <span class="file-name" title="${escapeHtml(file.path || file.name)}">${escapeHtml(file.name)}</span>
+              <span class="file-meta">${isDir ? escapeHtml(file.path) + ' • ' : ''}${formatBytes(file.size)}</span>
+            </div>
           </div>
-          <button type="button" class="btn-secondary sm btn-download-file" data-code="${drop.code}" data-id="${file.id}" data-name="${escapeHtml(file.name)}">Download</button>
+          <a href="${fileUrl}" class="btn-secondary sm" download="${escapeHtml(file.name)}">Download</a>
         `;
         receivedFilesList.appendChild(row);
       });
+
+      // "Download All as ZIP" via JSZip (preserving directory paths)
+      if (btnDownloadAllZip && typeof window.JSZip === 'function') {
+        btnDownloadAllZip.onclick = async () => {
+          btnDownloadAllZip.disabled = true;
+          btnDownloadAllZip.textContent = 'Zipping...';
+          try {
+            const zip = new window.JSZip();
+            for (const file of files) {
+              const res = await fetch(`/api/file/${drop.code}/${file.id}`);
+              const blob = await res.blob();
+              const zipPath = file.path || file.name;
+              zip.file(zipPath, blob);
+            }
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const zipUrl = URL.createObjectURL(zipBlob);
+            const a = document.createElement('a');
+            a.href = zipUrl;
+            a.download = `drop-${drop.code}-files.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(zipUrl);
+            showToast('ZIP archive downloaded! 📦');
+          } catch (err) {
+            showToast('Failed to bundle ZIP');
+          } finally {
+            btnDownloadAllZip.disabled = false;
+            btnDownloadAllZip.textContent = 'Download All (.zip)';
+          }
+        };
+      }
     } else {
       receivedFilesContainer.classList.add('hidden');
     }
 
-    switchTab('vault');
+    btnReceiveAnother.onclick = () => {
+      switchTab('receive');
+    };
   }
 
-  // --- SINGLE FILE DOWNLOADER ---
-  async function downloadSingleFile(code, fileId, fileName, btnEl) {
-    const originalText = btnEl ? btnEl.textContent : '';
-    if (btnEl) {
-      btnEl.textContent = '...';
-      btnEl.disabled = true;
+  // --- DEDICATED VAULT HISTORY SYSTEM ---
+  function setupVaultHistory() {
+    if (!btnOpenHistory) return;
+
+    btnOpenHistory.addEventListener('click', openVaultHistory);
+    if (btnCloseHistory) btnCloseHistory.addEventListener('click', closeVaultHistory);
+    if (historyModalOverlay) historyModalOverlay.addEventListener('click', closeVaultHistory);
+
+    if (btnClearHistory) {
+      btnClearHistory.addEventListener('click', () => {
+        if (confirm('Clear all local drop history?')) {
+          localStorage.removeItem(VAULT_HISTORY_KEY);
+          renderVaultHistoryList('all');
+          updateHistoryBadge();
+          showToast('History cleared');
+        }
+      });
     }
 
-    try {
-      showToast(`Downloading ${fileName}...`);
-      const fileUrl = getApiUrl(`/api/file/${code}/${fileId}?download=true`);
-      const res = await fetch(fileUrl);
-      if (!res.ok) throw new Error('File download failed');
+    historyFilterBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        historyFilterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const filter = btn.getAttribute('data-filter');
+        renderVaultHistoryList(filter);
+      });
+    });
+  }
 
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-      showToast('Download complete');
-    } catch (err) {
-      console.warn('Direct blob download fallback to window.open:', err);
-      window.open(getApiUrl(`/api/file/${code}/${fileId}?download=true`), '_blank');
-      showToast('Download started');
-    } finally {
-      if (btnEl) {
-        btnEl.textContent = originalText;
-        btnEl.disabled = false;
+  function getVaultHistory() {
+    try {
+      const raw = localStorage.getItem(VAULT_HISTORY_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function addDropToVaultHistory(item) {
+    const list = getVaultHistory().filter(h => h.code !== item.code);
+    list.unshift(item);
+    if (list.length > 50) list.pop();
+    localStorage.setItem(VAULT_HISTORY_KEY, JSON.stringify(list));
+    updateHistoryBadge();
+  }
+
+  function updateVaultHistoryStatus(code, status) {
+    const list = getVaultHistory();
+    const item = list.find(h => h.code === code);
+    if (item) {
+      item.status = status;
+      localStorage.setItem(VAULT_HISTORY_KEY, JSON.stringify(list));
+      updateHistoryBadge();
+    }
+  }
+
+  function updateHistoryBadge() {
+    const list = getVaultHistory();
+    const activeCount = list.filter(h => h.status === 'active' && (!h.expiresAt || h.expiresAt > Date.now())).length;
+    if (historyBadgeCount) {
+      if (activeCount > 0) {
+        historyBadgeCount.textContent = activeCount;
+        historyBadgeCount.classList.remove('hidden');
+      } else {
+        historyBadgeCount.classList.add('hidden');
       }
     }
   }
 
-  // --- ZIP ARCHIVER ---
-  async function downloadZip() {
-    if (!activeDropData || !activeDropData.files || !activeDropData.files.length) return;
-    if (typeof JSZip === 'undefined') {
-      showToast('Archiver unavailable');
+  function openVaultHistory() {
+    historyModal.classList.add('show');
+    historyModal.setAttribute('aria-hidden', 'false');
+    renderVaultHistoryList('all');
+  }
+
+  function closeVaultHistory() {
+    historyModal.classList.remove('show');
+    historyModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function renderVaultHistoryList(filter = 'all') {
+    const list = getVaultHistory();
+    const now = Date.now();
+
+    const filtered = list.filter(item => {
+      if (filter === 'sent') return item.direction === 'sent';
+      if (filter === 'received') return item.direction === 'received';
+      return true;
+    });
+
+    historyList.innerHTML = '';
+    if (filtered.length === 0) {
+      historyEmpty.classList.remove('hidden');
       return;
     }
+    historyEmpty.classList.add('hidden');
 
-    btnDownloadAllZip.textContent = 'Downloading...';
-    btnDownloadAllZip.disabled = true;
+    filtered.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'history-card';
+      const isExpired = item.expiresAt && item.expiresAt <= now;
+      let statusClass = item.status || 'active';
+      if (isExpired && statusClass === 'active') statusClass = 'expired';
 
-    try {
-      const zip = new JSZip();
+      card.innerHTML = `
+        <div class="history-card-top">
+          <div class="history-pin-wrap">
+            <span class="history-pin-badge">#${item.code}</span>
+            <span class="history-direction-tag">${item.direction || 'drop'}</span>
+          </div>
+          <span class="history-status-pill ${statusClass}">${statusClass.toUpperCase()}</span>
+        </div>
+        <div class="history-card-content">${escapeHtml(item.title || 'Drop Payload')}</div>
+        <div class="history-card-actions">
+          <span>${formatTimeAgo(item.createdAt)}</span>
+          ${item.direction === 'sent' && statusClass === 'active' ? `<button type="button" class="history-btn-revoke" data-code="${item.code}">Revoke</button>` : ''}
+        </div>
+      `;
 
-      for (let i = 0; i < activeDropData.files.length; i++) {
-        const file = activeDropData.files[i];
-        btnDownloadAllZip.textContent = `Zipping (${i + 1}/${activeDropData.files.length})...`;
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.history-btn-revoke')) return;
+        closeVaultHistory();
+        fetchDropByPin(item.code);
+      });
 
-        if (file.dataBase64) {
-          const base64Data = file.dataBase64.includes(',') ? file.dataBase64.split(',')[1] : file.dataBase64;
-          zip.file(file.name, base64Data, { base64: true });
-        } else {
-          const fileUrl = getApiUrl(`/api/file/${activeDropData.code}/${file.id}`);
-          const res = await fetch(fileUrl);
-          if (res.ok) {
-            const blob = await res.blob();
-            zip.file(file.name, blob);
+      const revokeBtn = card.querySelector('.history-btn-revoke');
+      if (revokeBtn) {
+        revokeBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const code = revokeBtn.getAttribute('data-code');
+          if (confirm(`Revoke and wipe drop #${code}?`)) {
+            await fetch(`/api/drop/${code}`, { method: 'DELETE' });
+            updateVaultHistoryStatus(code, 'burned');
+            renderVaultHistoryList(filter);
+            showToast(`Drop #${code} revoked`);
+          }
+        });
+      }
+
+      historyList.appendChild(card);
+    });
+  }
+
+  // --- PICKUP WATCHER ---
+  function startPickupWatcher(code) {
+    let active = true;
+    const interval = setInterval(async () => {
+      if (!active || !activeDropData || activeDropData.code !== code) {
+        clearInterval(interval);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/drop/${code}?peek=true`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.drop && data.drop.pickedUp) {
+            sharePickupBanner.classList.remove('hidden');
+            shareStatusText.textContent = 'Picked up 🎉';
+            shareStatusDot.style.background = '#38bdf8';
+            updateVaultHistoryStatus(code, 'pickedUp');
+            playChime('success');
+            clearInterval(interval);
+            active = false;
           }
         }
-      }
+      } catch (e) {}
+    }, 2000);
+  }
 
-      if (activeDropData.text) {
-        zip.file('note.txt', activeDropData.text);
-      }
+  // --- HELPERS ---
+  function detectLiveInput() {
+    const val = inputText.value.trim();
+    if (!val) {
+      liveInputBar.classList.add('hidden');
+      return;
+    }
+    liveInputBar.classList.remove('hidden');
+    liveStats.textContent = `${val.length} chars`;
 
-      btnDownloadAllZip.textContent = 'Compressing...';
-      const content = await zip.generateAsync({ type: 'blob' });
-      const url = URL.createObjectURL(content);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `drop_${activeDropData.code || 'files'}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-      showToast('ZIP downloaded');
-    } catch (e) {
-      console.error('ZIP error:', e);
-      showToast('Compression failed');
-    } finally {
-      btnDownloadAllZip.textContent = 'Download All (.zip)';
-      btnDownloadAllZip.disabled = false;
+    const urls = extractUrls(val);
+    if (urls.length > 0) {
+      liveTagBadge.textContent = '🔗 Link';
+      try {
+        liveTagDesc.textContent = new URL(urls[0]).hostname;
+      } catch (e) {
+        liveTagDesc.textContent = 'web link';
+      }
+    } else {
+      liveTagBadge.textContent = '📝 Note';
+      liveTagDesc.textContent = 'plain text';
     }
   }
 
-  // --- COUNTDOWN ---
-  function startExpiryCountdown(expiresAtIso, targetEl) {
+  function detectTextType(text) {
+    if (!text) return 'plain';
+    const urls = extractUrls(text);
+    if (urls.length > 0 && urls[0] === text.trim()) return 'url';
+    return 'plain';
+  }
+
+  function extractUrls(text) {
+    if (!text) return [];
+    const matches = text.match(/https?:\/\/[^\s]+/g);
+    return matches || [];
+  }
+
+  function startCountdown(expiresAt, element, onExpire) {
     if (countdownTimer) clearInterval(countdownTimer);
-    if (!expiresAtIso || !targetEl) return;
-
-    const expiryTime = typeof expiresAtIso === 'number' ? expiresAtIso : new Date(expiresAtIso).getTime();
-
     function update() {
-      const now = Date.now();
-      const diff = Math.max(0, expiryTime - now);
-      const totalSec = Math.floor(diff / 1000);
-      const mins = Math.floor(totalSec / 60);
-      const secs = totalSec % 60;
-      targetEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-
-      if (diff <= 0) {
+      const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      element.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
+      if (remaining <= 0) {
         clearInterval(countdownTimer);
-        targetEl.textContent = 'Expired';
-        stopPickupWatcher();
-        clearActiveSenderDrop();
+        if (onExpire) onExpire();
       }
     }
-
     update();
     countdownTimer = setInterval(update, 1000);
   }
 
-  // --- DIRECT PIN ROUTE ---
-  function checkDirectPinRoute() {
-    const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
-    if (/^\d{4}$/.test(path)) {
-      path.split('').forEach((d, i) => {
-        if (pinCells[i]) pinCells[i].value = d;
-      });
+  function updateActiveBanner() {
+    try {
+      const raw = localStorage.getItem(SENDER_STORAGE_KEY);
+      if (raw) {
+        const drop = JSON.parse(raw);
+        if (drop && drop.expiresAt > Date.now()) {
+          activeBannerPin.textContent = drop.code;
+          activeDropBanner.classList.remove('hidden');
+          btnBannerView.onclick = () => {
+            activeDropData = drop;
+            renderShareScreen(drop);
+            showView('share');
+          };
+          btnBannerDismiss.onclick = () => {
+            activeDropBanner.classList.add('hidden');
+          };
+        } else {
+          activeDropBanner.classList.add('hidden');
+        }
+      }
+    } catch (e) {}
+  }
+
+  function checkDirectUrlOrActiveDrop() {
+    const path = window.location.pathname.replace(/^\//, '').toUpperCase();
+    if (path.length === 4 && /^[A-Z0-9]{4}$/.test(path)) {
+      switchTab('receive');
+      path.split('').forEach((c, i) => { if (pinCells[i]) pinCells[i].value = c; });
       fetchDropByPin(path);
     }
   }
 
-  // --- HELPERS ---
-  function resetForm() {
-    inputText.value = '';
-    if (liveInputBar) liveInputBar.classList.add('hidden');
-    stagedFiles = [];
-    renderStagedFiles();
-    fileInput.value = '';
+  function showToast(msg) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'clean-toast';
+    toast.textContent = msg;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(10px)';
+      setTimeout(() => toast.remove(), 300);
+    }, 2800);
   }
 
-  function formatFileSize(bytes) {
+  function escapeHtml(str) {
+    return String(str || '').replace(/[&<>"']/g, m => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    })[m]);
+  }
+
+  function formatBytes(bytes) {
     if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
@@ -1869,55 +1716,184 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
-  function escapeHtml(str) {
-    return (str || '').replace(/[&<>"']/g, m => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[m]));
+  function formatTimeAgo(ts) {
+    const diff = Math.floor((Date.now() - ts) / 1000);
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
   }
 
-  function showToast(msg) {
-    const shelf = document.getElementById('toast-container');
-    if (!shelf) return;
-    const toast = document.createElement('div');
-    toast.className = 'clean-toast';
-    toast.textContent = msg;
-    shelf.appendChild(toast);
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(6px)';
-      toast.style.transition = 'all 150ms ease-out';
-      setTimeout(() => toast.remove(), 150);
-    }, 2800);
+  // --- CAMERA PHOTO SNAP ---
+  function setupCamera() {
+    if (!btnCamera || !cameraModal) return;
+    btnCamera.addEventListener('click', openCamera);
+    btnCameraClose.addEventListener('click', closeCamera);
+    btnCameraSnap.addEventListener('click', capturePhoto);
   }
 
-  function init() {
-    setupTabs();
-    setupPinInputs();
-    setupLiveInputWatcher();
-    setupDropzone();
-    setupCamera();
-    setupActions();
-    setupUpdateModal();
-
-    // Check if user has an active unexpired drop
-    const active = getActiveSenderDrop();
-    if (active) {
-      activeDropData = active;
-      displayShareScreen(active);
-    } else {
-      updateActiveDropBanner();
-    }
-
-    checkDirectPinRoute();
-
-    if (isCapacitorNative()) {
-      checkAppUpdate(false);
+  async function openCamera() {
+    cameraModal.classList.add('show');
+    cameraModal.setAttribute('aria-hidden', 'false');
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      cameraVideo.srcObject = cameraStream;
+      cameraVideo.play();
+    } catch (e) {
+      showToast('Camera access failed');
+      closeCamera();
     }
   }
 
+  function closeCamera() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t => t.stop());
+      cameraStream = null;
+    }
+    cameraModal.classList.remove('show');
+    cameraModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function capturePhoto() {
+    if (!cameraStream) return;
+    cameraCanvas.width = cameraVideo.videoWidth;
+    cameraCanvas.height = cameraVideo.videoHeight;
+    const ctx = cameraCanvas.getContext('2d');
+    ctx.drawImage(cameraVideo, 0, 0);
+
+    cameraCanvas.toBlob(blob => {
+      if (blob) {
+        const id = 'f_' + Math.random().toString(36).substring(2, 9);
+        const fileName = `photo_${Date.now()}.jpg`;
+        const file = new File([blob], fileName, { type: 'image/jpeg' });
+        stagedFiles.push({
+          id,
+          name: fileName,
+          path: '',
+          type: 'image/jpeg',
+          size: file.size,
+          fileHandle: file
+        });
+        renderStagedChips();
+        checkTotalStagedSize();
+        playChime('copy');
+        showToast('Photo captured! 📷');
+      }
+      closeCamera();
+    }, 'image/jpeg', 0.9);
+  }
+
+  // --- MOBILE BANNER & UPDATER ---
+  function setupMobileAppBanner() {
+    if (!mobileAppBanner) return;
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isNativeCapacitor = Boolean(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    if (isMobile && !isNativeCapacitor && !sessionStorage.getItem('dismissed_banner')) {
+      mobileAppBanner.classList.remove('hidden');
+    }
+    if (btnDismissAppBanner) {
+      btnDismissAppBanner.addEventListener('click', () => {
+        mobileAppBanner.classList.add('hidden');
+        sessionStorage.setItem('dismissed_banner', 'true');
+      });
+    }
+  }
+
+  function setupInAppUpdater() {
+    const btnCheckUpdate = document.getElementById('btn-check-update');
+    const updateModal = document.getElementById('update-modal');
+    const btnUpdateNow = document.getElementById('btn-update-now');
+    const btnUpdateLater = document.getElementById('btn-update-later');
+    const updateTitle = document.getElementById('update-title');
+    const updateDesc = document.getElementById('update-desc');
+    const updateNotesText = document.getElementById('update-notes-text');
+    const modalDownloadProgress = document.getElementById('modal-download-progress-container');
+    const modalProgressBar = document.getElementById('modal-download-progress-bar');
+    const modalStatusText = document.getElementById('modal-download-status-text');
+    const modalPercentBadge = document.getElementById('modal-download-percent-badge');
+    const modalBytesText = document.getElementById('modal-download-bytes-text');
+    const modalSpeedText = document.getElementById('modal-download-speed-text');
+
+    const CURRENT_VERSION = (window.APP_CONFIG && window.APP_CONFIG.version) ? window.APP_CONFIG.version : '1.0.28';
+    const footerVersionVal = document.getElementById('footer-version-val');
+    if (footerVersionVal) footerVersionVal.textContent = CURRENT_VERSION;
+
+    if (btnCheckUpdate) {
+      btnCheckUpdate.addEventListener('click', () => checkVersion(true));
+    }
+    if (btnUpdateLater) {
+      btnUpdateLater.addEventListener('click', () => {
+        updateModal.classList.remove('show');
+      });
+    }
+
+    async function checkVersion(manual = false) {
+      try {
+        const res = await fetch('/api/version');
+        if (!res.ok) return;
+        const info = await res.json();
+        if (isVersionGreater(info.version, CURRENT_VERSION)) {
+          showUpdateModal(info);
+        } else if (manual) {
+          showToast(`You are on the latest version (v${CURRENT_VERSION}) ✨`);
+        }
+      } catch (e) {}
+    }
+
+    function showUpdateModal(info) {
+      updateTitle.textContent = `Update to v${info.version}`;
+      updateDesc.textContent = `New features & improvements available.`;
+      updateNotesText.textContent = info.releaseNotes || 'Bug fixes and performance improvements.';
+      updateModal.classList.add('show');
+
+      btnUpdateNow.onclick = async () => {
+        const isNative = Boolean(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkInstaller);
+        const downloadUrl = window.location.origin + info.downloadUrl;
+
+        if (isNative) {
+          btnUpdateNow.disabled = true;
+          modalDownloadProgress.classList.remove('hidden');
+          const ApkInstaller = window.Capacitor.Plugins.ApkInstaller;
+
+          const progressSub = await ApkInstaller.addListener('downloadProgress', (p) => {
+            modalProgressBar.style.width = p.percent + '%';
+            modalPercentBadge.textContent = p.percent + '%';
+            modalBytesText.textContent = `${formatBytes(p.loaded)} / ${formatBytes(p.total)}`;
+          });
+
+          try {
+            await ApkInstaller.downloadAndInstall({ url: downloadUrl });
+          } catch (err) {
+            window.location.href = downloadUrl;
+          } finally {
+            progressSub.remove();
+          }
+        } else {
+          window.location.href = downloadUrl;
+        }
+      };
+    }
+
+    function isVersionGreater(remote, local) {
+      const r = (remote || '').replace(/^v/, '').split('.').map(Number);
+      const l = (local || '').replace(/^v/, '').split('.').map(Number);
+      for (let i = 0; i < Math.max(r.length, l.length); i++) {
+        const rv = r[i] || 0;
+        const lv = l[i] || 0;
+        if (rv > lv) return true;
+        if (rv < lv) return false;
+      }
+      return false;
+    }
+
+    setTimeout(() => checkVersion(false), 2000);
+  }
+
+  // Run on DOM ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
+
 })();

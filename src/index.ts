@@ -1,4 +1,4 @@
-import { CreateDropRequest, DropMetadata, Env, FileEntry } from './types';
+import { CreateDropRequest, DropMetadata, Env, FileEntry, WebRTCSignal } from './types';
 
 // CORS response helper
 const corsHeaders: Record<string, string> = {
@@ -19,9 +19,9 @@ function jsonResponse(data: any, status = 200, extraHeaders: Record<string, stri
   });
 }
 
-// Generate secure random alphanumeric PIN
+// Generate secure random 4-character alphanumeric PIN (36^4 = 1,679,616 combinations)
 function generatePin(length = 4): string {
-  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
   let pin = '';
@@ -55,6 +55,19 @@ export default {
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders });
+    }
+
+    // WebRTC Signaling Routes
+    if (pathname.startsWith('/api/webrtc/') && pathname.endsWith('/signal')) {
+      const parts = pathname.split('/');
+      const code = parts[3]?.trim().toUpperCase();
+      if (request.method === 'POST') {
+        return handleWebRTCSendSignal(code, request, env);
+      }
+      if (request.method === 'GET') {
+        const forPeer = url.searchParams.get('for') || 'sender';
+        return handleWebRTCGetSignals(code, forPeer, env);
+      }
     }
 
     // Chunk upload route: PUT /api/drop/:code/file/:fileId/chunk/:chunkIndex or PUT /api/drop/:code/file/:fileId
@@ -151,33 +164,30 @@ export default {
           });
           if (ghRes.ok) {
             const ghData: any = await ghRes.json();
-            if (ghData.assets?.[0]?.browser_download_url) {
-              downloadUrl = ghData.assets[0].browser_download_url;
+            const asset = ghData.assets?.find((a: any) => a.name.endsWith('.apk'));
+            if (asset && asset.browser_download_url) {
+              downloadUrl = asset.browser_download_url;
             }
           }
         } catch (e) {}
 
         const apkRes = await fetch(downloadUrl, {
-          headers: { 'User-Agent': 'atmr-drop-worker' },
-          redirect: 'follow',
+          headers: { 'User-Agent': 'atmr-drop-android-client' },
         });
 
-        if (!apkRes.ok) {
-          return new Response('APK binary not available', { status: 404, headers: corsHeaders });
+        if (!apkRes.ok || !apkRes.body) {
+          return new Response('APK binary unavailable on both database and GitHub releases', { status: 502, headers: corsHeaders });
         }
 
         const headers: Record<string, string> = {
           ...corsHeaders,
           'Content-Type': 'application/vnd.android.package-archive',
           'Content-Disposition': 'attachment; filename="atmr-drop.apk"',
-          'Cache-Control': 'public, max-age=180',
-          'X-Source': 'GitHub-Releases-Fallback',
+          'Cache-Control': 'public, max-age=300',
+          'X-Source': 'GitHub-Releases-Stream',
         };
-
-        const len = apkRes.headers.get('content-length');
-        if (len) {
-          headers['Content-Length'] = len;
-        }
+        const cl = apkRes.headers.get('content-length');
+        if (cl) headers['Content-Length'] = cl;
 
         return new Response(apkRes.body, {
           status: 200,
@@ -213,10 +223,10 @@ export default {
           ghPage = ghData.html_url || '';
         }
 
-        const effectiveVersion = kvMeta?.version || ghTag || '1.0.26';
+        const effectiveVersion = kvMeta?.version || ghTag || '1.0.28';
         let cleanNotes = ghNotes;
         if (!cleanNotes || cleanNotes.includes('The Daily Drop') || cleanNotes.includes('Published by')) {
-          cleanNotes = '• High-performance multi-part binary streaming: seamlessly upload and drop files up to 10 GB with 0 RAM overhead\n• Zero "Invalid string length" errors with native streaming file handles\n• Real-time upload status bar with live speed & transferred byte tracking\n• Instant drop pickup detection, celebratory audio chime & native push notifications\n• In-app direct APK self-installer';
+          cleanNotes = '• Android System Share Sheet target: Send files directly from Gallery or File Manager in 1 tap\n• Integrated Camera QR Code Scanner with instant PIN detection\n• WebRTC P2P Direct Local Transfer ("Zero Cloud" high-speed mode)\n• Zero-Knowledge E2EE (AES-256-GCM) with URL hash fragment cryptography\n• Dedicated Vault / History screen with live countdowns & instant revocation\n• Folder & Directory recursive hierarchy uploads & ZIP bundling\n• 4-Character alphanumeric PIN with 1.68M combinations & seamless paste auto-fetch';
         }
 
         return jsonResponse({
@@ -225,18 +235,18 @@ export default {
           fallbackUrl: ghAssetUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
           releasePage: ghPage || 'https://github.com/ATMRaven/atmr-drop/releases/latest',
           mandatory: false,
-          releaseNotes: cleanNotes || 'Performance enhancements and bug fixes.',
+          releaseNotes: cleanNotes,
           source: kvMeta ? 'database' : 'github',
         });
       } catch (e) {}
 
       return jsonResponse({
-        version: '1.0.26',
+        version: '1.0.28',
         downloadUrl: '/api/apk/latest',
         fallbackUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
         releasePage: 'https://github.com/ATMRaven/atmr-drop/releases/latest',
         mandatory: false,
-        releaseNotes: '• High-performance multi-part binary streaming: seamlessly upload and drop files up to 10 GB with 0 RAM overhead\n• Zero "Invalid string length" errors with native streaming file handles\n• Real-time upload status bar with live speed & transferred byte tracking\n• Instant drop pickup detection, celebratory audio chime & native push notifications\n• In-app direct APK self-installer',
+        releaseNotes: '• Android System Share Sheet target\n• Camera QR Code Scanner\n• WebRTC P2P Local LAN transfer\n• Zero-Knowledge E2EE (AES-256-GCM)\n• Vault / History screen\n• Folder & Directory uploads\n• 4-Character alphanumeric PIN with paste auto-fetch',
       });
     }
 
@@ -247,11 +257,13 @@ export default {
         version: '1.0.0',
         creator: 'atmr',
         endpoints: {
-          'POST /api/drop': 'Create a new encrypted wire drop metadata (text, files manifest, dynamic TTL, burnAfterRead)',
+          'POST /api/drop': 'Create a new encrypted wire drop metadata (custom 4-char PIN, E2EE flag, files manifest)',
           'PUT /api/drop/:code/file/:fileId/chunk/:chunkIndex': 'Stream raw binary chunk for a file attachment (10 MB chunks)',
-          'GET /api/drop/:code': 'Retrieve drop metadata and active files manifest by 4-digit PIN code',
+          'GET /api/drop/:code': 'Retrieve drop metadata and active files manifest by 4-character PIN code',
           'GET /api/file/:code/:fileId': 'Stream or download individual file attachment binary',
-          'DELETE /api/drop/:code': 'Manually delete drop from KV before expiry',
+          'DELETE /api/drop/:code': 'Manually delete/revoke drop from KV before expiry',
+          'POST /api/webrtc/:code/signal': 'Send WebRTC SDP offer, answer, or ICE candidate for direct P2P transfer',
+          'GET /api/webrtc/:code/signal': 'Poll WebRTC signals for direct P2P connection',
           'GET /api/health': 'Health check status',
         },
         directRoutePattern: 'https://drop.atmr.workers.dev/:pin',
@@ -263,8 +275,8 @@ export default {
       return jsonResponse({ status: 'ok', app: 'atmr-drop', creator: 'atmr', timestamp: Date.now() });
     }
 
-    // Check if the route is a direct drop link like /1234 or /7890
-    const codeMatch = pathname.match(/^\/([a-zA-Z0-9]{4,8})$/);
+    // Check if the route is a direct drop link like /1234 or /A4G4
+    const codeMatch = pathname.match(/^\/([a-zA-Z0-9]{4})$/);
     if (codeMatch && env.ASSETS) {
       const indexReq = new Request(new URL('/', request.url), request);
       return env.ASSETS.fetch(indexReq);
@@ -288,22 +300,36 @@ async function handleCreateDrop(request: Request, env: Env): Promise<Response> {
     // Bound TTL between 60s (1 min) and 86400s (24 hours)
     const ttlSeconds = Math.max(60, Math.min(86400, Math.floor(rawTtl)));
     const burnAfterRead = Boolean(body.burnAfterRead);
+    const isEncrypted = Boolean(body.isEncrypted);
 
-    // Find an available unique 4-character PIN
     let code = '';
-    let attempts = 0;
-    while (attempts < 10) {
-      const candidate = generatePin(4);
-      const existing = await env.ATMR_DROP_KV.get(`drop:${candidate}`);
-      if (!existing) {
-        code = candidate;
-        break;
-      }
-      attempts++;
-    }
 
-    if (!code) {
-      code = generatePin(6);
+    // Handle Custom Memorable 4-Character PIN if requested
+    if (body.customPin) {
+      const sanitized = body.customPin.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+      if (sanitized.length !== 4) {
+        return jsonResponse({ error: 'Custom PIN must be exactly 4 alphanumeric characters (A-Z, 0-9).' }, 400);
+      }
+      const existing = await env.ATMR_DROP_KV.get(`drop:${sanitized}`);
+      if (existing) {
+        return jsonResponse({ error: `PIN "${sanitized}" is already taken by another active drop. Please choose a different PIN.` }, 409);
+      }
+      code = sanitized;
+    } else {
+      // Find an available unique 4-character PIN (from 1,679,616 combinations)
+      let attempts = 0;
+      while (attempts < 15) {
+        const candidate = generatePin(4);
+        const existing = await env.ATMR_DROP_KV.get(`drop:${candidate}`);
+        if (!existing) {
+          code = candidate;
+          break;
+        }
+        attempts++;
+      }
+      if (!code) {
+        code = generatePin(4);
+      }
     }
 
     const now = Date.now();
@@ -325,6 +351,7 @@ async function handleCreateDrop(request: Request, env: Env): Promise<Response> {
             expirationTtl: ttlSeconds,
             metadata: {
               name: f.name,
+              path: f.path || '',
               type: f.type || 'application/octet-stream',
               size: f.size,
             },
@@ -335,6 +362,7 @@ async function handleCreateDrop(request: Request, env: Env): Promise<Response> {
       fileEntries.push({
         id: fileId,
         name: f.name,
+        path: f.path || '',
         size: f.size,
         type: f.type || 'application/octet-stream',
         chunkCount,
@@ -352,6 +380,7 @@ async function handleCreateDrop(request: Request, env: Env): Promise<Response> {
       retrievedCount: 0,
       text: body.text,
       textType: body.textType || 'plain',
+      isEncrypted,
       files: fileEntries,
       creator: 'atmr',
     };
@@ -372,6 +401,7 @@ async function handleCreateDrop(request: Request, env: Env): Promise<Response> {
       expiresAt,
       ttlSeconds,
       burnAfterRead,
+      isEncrypted,
       itemCount: (metadata.text ? 1 : 0) + fileEntries.length,
       fileCount: fileEntries.length,
       text: metadata.text,
@@ -576,7 +606,7 @@ async function handleGetFile(code: string, fileId: string, isDownload: boolean, 
   }
 }
 
-// Handler: Delete Drop
+// Handler: Delete/Revoke Drop
 async function handleDeleteDrop(code: string, env: Env): Promise<Response> {
   try {
     const raw = await env.ATMR_DROP_KV.get(`drop:${code}`);
@@ -591,8 +621,78 @@ async function handleDeleteDrop(code: string, env: Env): Promise<Response> {
       }
     }
     await env.ATMR_DROP_KV.delete(`drop:${code}`);
-    return jsonResponse({ success: true, message: `Drop ${code} deleted` });
+    await env.ATMR_DROP_KV.delete(`pickup:${code}`);
+
+    // Clean up any WebRTC signaling keys for this room
+    const webrtcPrefix = `webrtc:${code}:`;
+    const webrtcList = await env.ATMR_DROP_KV.list({ prefix: webrtcPrefix });
+    for (const key of webrtcList.keys) {
+      await env.ATMR_DROP_KV.delete(key.name);
+    }
+
+    return jsonResponse({ success: true, message: `Drop ${code} completely wiped from database` });
   } catch (err: any) {
     return jsonResponse({ error: 'Failed to delete drop', details: err?.message || String(err) }, 500);
+  }
+}
+
+// Handler: WebRTC Send Signal (Offer, Answer, ICE Candidate)
+async function handleWebRTCSendSignal(code: string, request: Request, env: Env): Promise<Response> {
+  try {
+    if (!code) return jsonResponse({ error: 'Room code required' }, 400);
+    const body = (await request.json()) as WebRTCSignal;
+    if (!body.from || !body.type || !body.payload) {
+      return jsonResponse({ error: 'Invalid WebRTC signal format' }, 400);
+    }
+
+    const timestamp = Date.now();
+    const sigId = Math.random().toString(36).substring(2, 7);
+    const key = `webrtc:${code}:${body.from}:${timestamp}_${sigId}`;
+
+    const signalData: WebRTCSignal = {
+      from: body.from,
+      type: body.type,
+      payload: body.payload,
+      timestamp,
+    };
+
+    // Store in KV with 120s TTL
+    await env.ATMR_DROP_KV.put(key, JSON.stringify(signalData), {
+      expirationTtl: 120,
+    });
+
+    return jsonResponse({ success: true, key });
+  } catch (err: any) {
+    return jsonResponse({ error: 'Failed to send WebRTC signal: ' + (err.message || String(err)) }, 500);
+  }
+}
+
+// Handler: WebRTC Get Signals (Poll pending signals for peer)
+async function handleWebRTCGetSignals(code: string, forPeer: string, env: Env): Promise<Response> {
+  try {
+    if (!code) return jsonResponse({ error: 'Room code required' }, 400);
+
+    // If 'for' is 'sender', we look for signals from 'receiver'
+    // If 'for' is 'receiver', we look for signals from 'sender'
+    const targetSource = forPeer === 'sender' ? 'receiver' : 'sender';
+    const prefix = `webrtc:${code}:${targetSource}:`;
+
+    const list = await env.ATMR_DROP_KV.list({ prefix });
+    const signals: WebRTCSignal[] = [];
+
+    for (const key of list.keys) {
+      const raw = await env.ATMR_DROP_KV.get(key.name);
+      if (raw) {
+        try {
+          signals.push(JSON.parse(raw));
+        } catch (e) {}
+        // Delete once retrieved so signals aren't processed twice
+        await env.ATMR_DROP_KV.delete(key.name);
+      }
+    }
+
+    return jsonResponse({ success: true, signals });
+  } catch (err: any) {
+    return jsonResponse({ error: 'Failed to get WebRTC signals: ' + (err.message || String(err)) }, 500);
   }
 }
