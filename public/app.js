@@ -626,99 +626,46 @@
     return false;
   }
 
-  async function downloadUpdateInApp(downloadUrl, fallbackUrl, version) {
+  function downloadUpdateInApp(downloadUrl, fallbackUrl, version) {
     const primaryUrl = downloadUrl ? getApiUrl(downloadUrl) : getApiUrl('/api/apk/latest');
     const secondaryUrl = fallbackUrl || 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk';
 
     if (btnUpdateNow) {
-      btnUpdateNow.disabled = true;
-      btnUpdateNow.textContent = 'Downloading...';
+      btnUpdateNow.disabled = false;
+      btnUpdateNow.textContent = '⚡ Downloading...';
     }
     if (btnUpdateLater) {
-      btnUpdateLater.classList.add('hidden');
+      btnUpdateLater.classList.remove('hidden');
+      btnUpdateLater.textContent = 'Dismiss';
     }
 
     if (modalDownloadProgressContainer) {
       modalDownloadProgressContainer.classList.remove('hidden');
-      if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = '0%';
-      if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = '0%';
+      if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = '100%';
+      if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = 'Ready';
       if (modalDownloadStatusText) modalDownloadStatusText.textContent = `Downloading v${version || 'update'}...`;
-      if (modalDownloadBytesText) modalDownloadBytesText.textContent = 'Connecting...';
-      if (modalDownloadSpeedText) modalDownloadSpeedText.textContent = '0 KB/s';
+      if (modalDownloadBytesText) modalDownloadBytesText.textContent = 'High-Speed Edge Stream';
+      if (modalDownloadSpeedText) modalDownloadSpeedText.textContent = 'Active';
     }
 
-    const startTime = performance.now();
-    const xhr = new XMLHttpRequest();
-    xhr.responseType = 'blob';
+    playChime('success');
+    showToast('Downloading atmr-drop.apk! Tap notification when done to install.', 'success');
 
-    xhr.onprogress = (event) => {
-      if (event.lengthComputable && modalDownloadProgressContainer) {
-        const percent = Math.min(99, Math.round((event.loaded / event.total) * 100));
-        if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = `${percent}%`;
-        if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = `${percent}%`;
-
-        const elapsedSec = (performance.now() - startTime) / 1000;
-        const speed = elapsedSec > 0 ? event.loaded / elapsedSec : 0;
-        if (modalDownloadBytesText) modalDownloadBytesText.textContent = `${formatFileSize(event.loaded)} / ${formatFileSize(event.total)}`;
-        if (modalDownloadSpeedText) modalDownloadSpeedText.textContent = `${formatFileSize(speed)}/s`;
-      }
-    };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300 && xhr.response && xhr.response.size > 100000) {
-        if (modalDownloadProgressContainer) {
-          if (modalDownloadProgressBar) modalDownloadProgressBar.style.width = '100%';
-          if (modalDownloadPercentBadge) modalDownloadPercentBadge.textContent = '100%';
-          if (modalDownloadStatusText) modalDownloadStatusText.textContent = 'Ready to Install ✓';
-          if (modalDownloadSpeedText) modalDownloadSpeedText.textContent = 'Complete';
-        }
-
-        if (btnUpdateNow) {
-          btnUpdateNow.disabled = false;
-          btnUpdateNow.textContent = '✓ Install Ready';
-        }
-
-        playChime('success');
-
-        // Automatically trigger Android Package Installer or file download
-        try {
-          const blob = new Blob([xhr.response], { type: 'application/vnd.android.package-archive' });
-          const blobUrl = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = `atmr-drop-v${version || 'update'}.apk`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-          showToast('Update downloaded! Opening installer...', 'success');
-        } catch (blobErr) {
-          window.open(secondaryUrl, '_system');
-        }
-      } else {
-        // Fallback to secondary browser download
-        if (modalDownloadProgressContainer) modalDownloadProgressContainer.classList.add('hidden');
-        if (btnUpdateNow) {
-          btnUpdateNow.disabled = false;
-          btnUpdateNow.textContent = 'Download in Browser';
-        }
-        window.open(secondaryUrl, '_system');
-        showToast('Direct download opened in browser', 'info');
-      }
-    };
-
-    xhr.onerror = () => {
-      if (modalDownloadProgressContainer) modalDownloadProgressContainer.classList.add('hidden');
-      if (btnUpdateNow) {
-        btnUpdateNow.disabled = false;
-        btnUpdateNow.textContent = 'Download in Browser';
-      }
+    // Trigger system download safely without corrupting WebView DOM or navigating away
+    try {
+      window.open(primaryUrl, '_system');
+    } catch (e) {
       window.open(secondaryUrl, '_system');
-      showToast('Opening update in browser...', 'info');
-    };
+    }
 
-    xhr.open('GET', primaryUrl);
-    xhr.send();
+    setTimeout(() => {
+      if (btnUpdateNow) {
+        btnUpdateNow.textContent = '✓ Download Started (Tap to Re-download)';
+      }
+      if (modalDownloadStatusText) {
+        modalDownloadStatusText.textContent = 'Download active in notifications. Tap APK to install!';
+      }
+    }, 2500);
   }
 
   function formatReleaseNotes(raw) {
