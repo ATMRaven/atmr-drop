@@ -19,6 +19,71 @@
   const SENDER_STORAGE_KEY = 'atmr_active_sender_drop';
   const VAULT_HISTORY_KEY = 'atmr_drop_vault_history';
 
+  // --- UNIVERSAL API BASE URL (MOBILE APP + WEB APP) ---
+  const IS_NATIVE = Boolean(
+    (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ||
+    (typeof window !== 'undefined' && (window.location.origin === 'https://localhost' || window.location.origin === 'capacitor://localhost' || window.location.protocol === 'file:'))
+  );
+  const API_ORIGIN = IS_NATIVE ? 'https://drop.atmr.workers.dev' : '';
+
+  function getApiUrl(path) {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    const clean = path.startsWith('/') ? path : '/' + path;
+    return `${API_ORIGIN}${clean}`;
+  }
+
+  function dataUrlToBlob(dataUrl) {
+    try {
+      const parts = dataUrl.split(',');
+      const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream';
+      const binaryStr = atob(parts[1]);
+      const len = binaryStr.length;
+      const u8arr = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        u8arr[i] = binaryStr.charCodeAt(i);
+      }
+      return new Blob([u8arr], { type: mime });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function base64ToBlob(base64, mimeType = 'application/octet-stream') {
+    try {
+      const clean = base64.includes(',') ? base64.split(',')[1] : base64;
+      const binaryStr = atob(clean);
+      const len = binaryStr.length;
+      const u8arr = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        u8arr[i] = binaryStr.charCodeAt(i);
+      }
+      return new Blob([u8arr], { type: mimeType });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function triggerDirectDownload(url, filename) {
+    const a = document.createElement('a');
+    a.href = url;
+    if (filename) a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
   // --- SOUND SYSTEM ---
   const audioCtx = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) ? new (window.AudioContext || window.webkitAudioContext)() : null;
   const dropSounds = [
@@ -357,11 +422,7 @@
     if (tab === 'send') {
       tabSend.classList.add('active');
       tabReceive.classList.remove('active');
-      if (activeDropData && !isExplicitNewSend) {
-        showView('share');
-      } else {
-        showView('send');
-      }
+      showView('send');
     } else {
       tabReceive.classList.add('active');
       tabSend.classList.remove('active');
@@ -642,24 +703,24 @@
         const id = 'f_' + Math.random().toString(36).substring(2, 9);
         let blobOrHandle = null;
 
-        if (f.dataUrl) {
-          // Convert dataURL to Blob
-          const parts = f.dataUrl.split(',');
-          const mime = parts[0].match(/:(.*?);/)[1];
-          const bstr = atob(parts[1]);
-          let n = bstr.length;
-          const u8arr = new Uint8Array(n);
-          while (n--) u8arr[n] = bstr.charCodeAt(n);
-          blobOrHandle = new Blob([u8arr], { type: mime });
+        if (f.blob instanceof Blob) {
+          blobOrHandle = f.blob;
+        } else if (f.dataUrl) {
+          blobOrHandle = dataUrlToBlob(f.dataUrl);
+        } else if (f.dataBase64) {
+          blobOrHandle = base64ToBlob(f.dataBase64, f.type);
+        }
+        if (!blobOrHandle) {
+          blobOrHandle = new Blob([new Uint8Array(0)], { type: f.type || 'application/octet-stream' });
         }
 
         stagedFiles.push({
           id,
           name: f.name || 'shared_file',
-          path: '',
+          path: f.path || '',
           type: f.type || 'application/octet-stream',
-          size: f.size || (blobOrHandle ? blobOrHandle.size : 0),
-          fileHandle: blobOrHandle || f
+          size: f.size || blobOrHandle.size,
+          fileHandle: blobOrHandle
         });
       });
 
@@ -671,13 +732,24 @@
 
   // --- DROPZONE & FOLDER UPLOADS ---
   function setupDropzone() {
+    fileInput.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+    if (folderInput) {
+      folderInput.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+    }
+
     dropzone.addEventListener('click', (e) => {
-      if (e.target.closest('#btn-camera') || e.target.closest('#btn-folder-snap')) return;
+      if (e.target.closest('#btn-camera') || e.target.closest('#btn-folder-snap') || e.target === fileInput || e.target === folderInput) return;
       fileInput.click();
     });
 
     fileInput.addEventListener('change', () => {
-      handleFiles(fileInput.files);
+      if (fileInput.files && fileInput.files.length > 0) {
+        handleFiles(fileInput.files);
+      }
       fileInput.value = '';
     });
 
@@ -688,7 +760,9 @@
       });
 
       folderInput.addEventListener('change', () => {
-        handleFiles(folderInput.files, true);
+        if (folderInput.files && folderInput.files.length > 0) {
+          handleFiles(folderInput.files, true);
+        }
         folderInput.value = '';
       });
     }
@@ -917,7 +991,7 @@
           files: manifestFiles
         };
 
-        const res = await fetch('/api/drop', {
+        const res = await fetch(getApiUrl('/api/drop'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -1032,7 +1106,8 @@
   function uploadSingleChunkXHR(code, fileId, chunkIndex, blob, onProgress) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open('PUT', `/api/drop/${code}/file/${fileId}/chunk/${chunkIndex}`, true);
+      const url = getApiUrl(`/api/drop/${code}/file/${fileId}/chunk/${chunkIndex}`);
+      xhr.open('PUT', url, true);
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
 
       xhr.upload.onprogress = (e) => {
@@ -1144,7 +1219,7 @@
 
   async function sendWebRTCSignal(code, from, type, payload) {
     try {
-      await fetch(`/api/webrtc/${code}/signal`, {
+      await fetch(getApiUrl(`/api/webrtc/${code}/signal`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ from, type, payload })
@@ -1157,7 +1232,7 @@
     const interval = setInterval(async () => {
       if (!active) return;
       try {
-        const res = await fetch(`/api/webrtc/${code}/signal?for=${forPeer}`);
+        const res = await fetch(getApiUrl(`/api/webrtc/${code}/signal?for=${forPeer}`));
         if (res.ok) {
           const data = await res.json();
           if (data.signals && data.signals.length > 0) {
@@ -1178,7 +1253,7 @@
     btnFetchDrop.textContent = 'Decrypting...';
 
     try {
-      const res = await fetch(`/api/drop/${pin}`);
+      const res = await fetch(getApiUrl(`/api/drop/${pin}`));
       const data = await res.json();
 
       if (!res.ok || !data.success) {
@@ -1285,7 +1360,7 @@
 
     btnCancelDrop.onclick = async () => {
       if (confirm(`Revoke and immediately delete drop #${data.code}?`)) {
-        await fetch(`/api/drop/${data.code}`, { method: 'DELETE' });
+        await fetch(getApiUrl(`/api/drop/${data.code}`), { method: 'DELETE' });
         localStorage.removeItem(SENDER_STORAGE_KEY);
         activeDropData = null;
         updateVaultHistoryStatus(data.code, 'burned');
@@ -1352,17 +1427,45 @@
       imagesCount.textContent = images.length;
       receivedImagesGrid.innerHTML = '';
 
-      images.forEach(img => {
+      images.forEach(async (img) => {
         const item = document.createElement('div');
         item.className = 'gallery-item';
-        const fileUrl = `/api/file/${drop.code}/${img.id}`;
-        item.innerHTML = `
-          <img src="${fileUrl}" alt="${escapeHtml(img.name)}" loading="lazy">
-          <div class="gallery-overlay">
-            <span class="gallery-name">${escapeHtml(img.name)}</span>
-            <a href="${fileUrl}?download=true" class="gallery-save" download="${escapeHtml(img.name)}">Save</a>
-          </div>
+        const fileUrl = getApiUrl(`/api/file/${drop.code}/${img.id}`);
+
+        const imgEl = document.createElement('img');
+        imgEl.alt = img.name;
+        imgEl.loading = 'lazy';
+
+        const overlay = document.createElement('div');
+        overlay.className = 'gallery-overlay';
+        overlay.innerHTML = `
+          <span class="gallery-name">${escapeHtml(img.name)}</span>
+          <button type="button" class="gallery-save btn-save-img">Save</button>
         `;
+
+        if (drop.isEncrypted && e2eeKey) {
+          try {
+            const res = await fetch(fileUrl);
+            const cipherBuf = await res.arrayBuffer();
+            const plainBuf = await CryptoEngine.decryptBytes(cipherBuf, e2eeKey);
+            const blob = new Blob([plainBuf], { type: img.type || 'image/jpeg' });
+            const blobUrl = URL.createObjectURL(blob);
+            imgEl.src = blobUrl;
+            overlay.querySelector('.btn-save-img').onclick = () => {
+              downloadBlob(blob, img.name);
+            };
+          } catch (e) {
+            imgEl.alt = 'Decryption failed';
+          }
+        } else {
+          imgEl.src = fileUrl;
+          overlay.querySelector('.btn-save-img').onclick = () => {
+            triggerDirectDownload(fileUrl + '?download=true', img.name);
+          };
+        }
+
+        item.appendChild(imgEl);
+        item.appendChild(overlay);
         receivedImagesGrid.appendChild(item);
       });
     } else {
@@ -1379,7 +1482,7 @@
         const row = document.createElement('div');
         row.className = 'file-row';
         const isDir = Boolean(file.path && file.path.includes('/'));
-        const fileUrl = `/api/file/${drop.code}/${file.id}?download=true`;
+        const fileUrl = getApiUrl(`/api/file/${drop.code}/${file.id}?download=true`);
 
         row.innerHTML = `
           <div class="file-row-left">
@@ -1389,8 +1492,31 @@
               <span class="file-meta">${isDir ? escapeHtml(file.path) + ' • ' : ''}${formatBytes(file.size)}</span>
             </div>
           </div>
-          <a href="${fileUrl}" class="btn-secondary sm" download="${escapeHtml(file.name)}">Download</a>
+          <button type="button" class="btn-secondary sm btn-download-file">Download</button>
         `;
+
+        row.querySelector('.btn-download-file').onclick = async (e) => {
+          const btn = e.currentTarget;
+          if (drop.isEncrypted && e2eeKey) {
+            btn.disabled = true;
+            btn.textContent = 'Decrypting...';
+            try {
+              const res = await fetch(getApiUrl(`/api/file/${drop.code}/${file.id}`));
+              const cipherBuf = await res.arrayBuffer();
+              const plainBuf = await CryptoEngine.decryptBytes(cipherBuf, e2eeKey);
+              const blob = new Blob([plainBuf], { type: file.type || 'application/octet-stream' });
+              downloadBlob(blob, file.name);
+            } catch (err) {
+              showToast('Decryption failed');
+            } finally {
+              btn.disabled = false;
+              btn.textContent = 'Download';
+            }
+          } else {
+            triggerDirectDownload(fileUrl, file.name);
+          }
+        };
+
         receivedFilesList.appendChild(row);
       });
 
@@ -1402,20 +1528,20 @@
           try {
             const zip = new window.JSZip();
             for (const file of files) {
-              const res = await fetch(`/api/file/${drop.code}/${file.id}`);
-              const blob = await res.blob();
+              const res = await fetch(getApiUrl(`/api/file/${drop.code}/${file.id}`));
+              let blob = null;
+              if (drop.isEncrypted && e2eeKey) {
+                const cipherBuf = await res.arrayBuffer();
+                const plainBuf = await CryptoEngine.decryptBytes(cipherBuf, e2eeKey);
+                blob = new Blob([plainBuf], { type: file.type || 'application/octet-stream' });
+              } else {
+                blob = await res.blob();
+              }
               const zipPath = file.path || file.name;
               zip.file(zipPath, blob);
             }
             const zipBlob = await zip.generateAsync({ type: 'blob' });
-            const zipUrl = URL.createObjectURL(zipBlob);
-            const a = document.createElement('a');
-            a.href = zipUrl;
-            a.download = `drop-${drop.code}-files.zip`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(zipUrl);
+            downloadBlob(zipBlob, `drop-${drop.code}-files.zip`);
             showToast('ZIP archive downloaded! 📦');
           } catch (err) {
             showToast('Failed to bundle ZIP');
@@ -1565,7 +1691,7 @@
           e.stopPropagation();
           const code = revokeBtn.getAttribute('data-code');
           if (confirm(`Revoke and wipe drop #${code}?`)) {
-            await fetch(`/api/drop/${code}`, { method: 'DELETE' });
+            await fetch(getApiUrl(`/api/drop/${code}`), { method: 'DELETE' });
             updateVaultHistoryStatus(code, 'burned');
             renderVaultHistoryList(filter);
             showToast(`Drop #${code} revoked`);
@@ -1586,7 +1712,7 @@
         return;
       }
       try {
-        const res = await fetch(`/api/drop/${code}?peek=true`);
+        const res = await fetch(getApiUrl(`/api/drop/${code}?peek=true`));
         if (res.ok) {
           const data = await res.json();
           if (data.drop && data.drop.pickedUp) {
@@ -1829,7 +1955,7 @@
 
     async function checkVersion(manual = false) {
       try {
-        const res = await fetch('/api/version');
+        const res = await fetch(getApiUrl('/api/version'));
         if (!res.ok) return;
         const info = await res.json();
         if (isVersionGreater(info.version, CURRENT_VERSION)) {
@@ -1848,7 +1974,7 @@
 
       btnUpdateNow.onclick = async () => {
         const isNative = Boolean(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ApkInstaller);
-        const downloadUrl = window.location.origin + info.downloadUrl;
+        const downloadUrl = getApiUrl(info.downloadUrl);
 
         if (isNative) {
           btnUpdateNow.disabled = true;
