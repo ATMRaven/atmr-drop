@@ -34,7 +34,7 @@ jobs:
 
       - name: Inject Build Version into Web Assets
         run: |
-          echo "window.APP_VERSION = '1.0.${{ github.run_number }}';" > public/version.js
+          sed -i "s/window.APP_VERSION = '.*';/window.APP_VERSION = '1.0.${{ github.run_number }}';/" public/version.js
           echo "Injected window.APP_VERSION = '1.0.${{ github.run_number }}' into public/version.js"
 
       - name: Sync Capacitor Web Assets
@@ -76,9 +76,11 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: The Daily Drop Android v1.0.${{ github.run_number }}
           body: |
-            • True direct in-app APK downloader and self-updater
-            • Real-time download progress bar in update modal
-            • APK stored directly in Cloudflare KV database
+            • Remapped & elevated upload quick-actions bar: prominent Upload Folder & Take Photo buttons
+            • Sender-Only Deletion security: drop receivers can no longer delete drops; only creators retain burn access
+            • Universal in-browser file & image inspector lightbox with full-res zoom/pan and code line numbers
+            • Dedicated Help & System Info (? button) modal with complete feature guide and dynamic changelog
+            • True direct in-app APK downloader and self-updater with live speed progress bar
             • Real-time upload status bar with live speed & transferred byte tracking
-            • Instant drop pickup detection, celebratory audio chime & native push notifications
+            • WebRTC P2P Direct Local LAN Transfer & Zero-Knowledge E2EE (AES-256-GCM)
           files: atmr-drop.apk

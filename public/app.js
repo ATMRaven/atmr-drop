@@ -405,13 +405,15 @@
     setupCamera();
     setupQrScanner();
     setupVaultHistory();
+    setupFileInspector();
+    setupInfoModal();
     setupInAppUpdater();
     setupMobileAppBanner();
     setupNativeSendIntent();
     checkDirectUrlOrActiveDrop();
     updateHistoryBadge();
     const footerVersionVal = document.getElementById('footer-version-val');
-    const CURRENT_VERSION = window.APP_VERSION || (window.APP_CONFIG && window.APP_CONFIG.version) || '1.0.29';
+    const CURRENT_VERSION = window.APP_VERSION || (window.APP_CONFIG && window.APP_CONFIG.version) || '1.0.33';
     if (footerVersionVal) footerVersionVal.textContent = CURRENT_VERSION;
   }
 
@@ -894,12 +896,17 @@
       chip.className = 'staged-chip';
       const isDir = Boolean(f.path && f.path.includes('/'));
       chip.innerHTML = `
-        <span class="chip-name" title="${escapeHtml(f.path || f.name)}">
+        <span class="chip-name" style="cursor:pointer;" title="Click to inspect preview: ${escapeHtml(f.path || f.name)}">
           ${isDir ? '📁 ' : ''}${escapeHtml(f.name)}
         </span>
         <span class="chip-size">${formatBytes(f.size)}</span>
         <button type="button" class="btn-remove-chip" data-idx="${idx}" title="Remove file">&times;</button>
       `;
+
+      chip.querySelector('.chip-name').onclick = () => {
+        openFileInspector(f.fileHandle || f, null, null);
+      };
+
       stagedChipsList.appendChild(chip);
     });
 
@@ -1433,18 +1440,45 @@
       images.forEach(async (img) => {
         const item = document.createElement('div');
         item.className = 'gallery-item';
+        item.title = 'Click to inspect in full-screen lightbox';
         const fileUrl = getApiUrl(`/api/file/${drop.code}/${img.id}`);
 
+        const imgWrap = document.createElement('div');
+        imgWrap.className = 'gallery-img-wrap';
+
         const imgEl = document.createElement('img');
+        imgEl.className = 'gallery-img';
         imgEl.alt = img.name;
         imgEl.loading = 'lazy';
 
-        const overlay = document.createElement('div');
-        overlay.className = 'gallery-overlay';
-        overlay.innerHTML = `
-          <span class="gallery-name">${escapeHtml(img.name)}</span>
-          <button type="button" class="gallery-save btn-save-img">Save</button>
+        const hoverBadge = document.createElement('div');
+        hoverBadge.className = 'gallery-hover-badge';
+        hoverBadge.innerHTML = `<span class="badge-icon">🔍</span><span>Inspect</span>`;
+
+        imgWrap.appendChild(imgEl);
+        imgWrap.appendChild(hoverBadge);
+
+        const footer = document.createElement('div');
+        footer.className = 'gallery-item-footer';
+        footer.innerHTML = `
+          <span class="gallery-item-name" title="${escapeHtml(img.name)}">${escapeHtml(img.name)}</span>
+          <div class="gallery-item-actions">
+            <button type="button" class="btn-gallery-action btn-inspect-action" title="Inspect image">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              <span>Inspect</span>
+            </button>
+            <button type="button" class="btn-gallery-action btn-save-action" title="Save file">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Save</span>
+            </button>
+          </div>
         `;
+
+        item.onclick = (e) => {
+          if (!e.target.closest('.btn-save-action')) {
+            openFileInspector(img, drop.code, e2eeKey);
+          }
+        };
 
         if (drop.isEncrypted && e2eeKey) {
           try {
@@ -1454,7 +1488,8 @@
             const blob = new Blob([plainBuf], { type: img.type || 'image/jpeg' });
             const blobUrl = URL.createObjectURL(blob);
             imgEl.src = blobUrl;
-            overlay.querySelector('.btn-save-img').onclick = () => {
+            footer.querySelector('.btn-save-action').onclick = (e) => {
+              e.stopPropagation();
               downloadBlob(blob, img.name);
             };
           } catch (e) {
@@ -1462,20 +1497,21 @@
           }
         } else {
           imgEl.src = fileUrl;
-          overlay.querySelector('.btn-save-img').onclick = () => {
+          footer.querySelector('.btn-save-action').onclick = (e) => {
+            e.stopPropagation();
             triggerDirectDownload(fileUrl + '?download=true', img.name);
           };
         }
 
-        item.appendChild(imgEl);
-        item.appendChild(overlay);
+        item.appendChild(imgWrap);
+        item.appendChild(footer);
         receivedImagesGrid.appendChild(item);
       });
     } else {
       receivedImagesContainer.classList.add('hidden');
     }
 
-    // Files List (Preserves Directory Structure)
+    // Files List (Preserves Directory Structure + Instant Inspection)
     if (nonImages.length > 0) {
       receivedFilesContainer.classList.remove('hidden');
       filesCount.textContent = nonImages.length;
@@ -1488,15 +1524,26 @@
         const fileUrl = getApiUrl(`/api/file/${drop.code}/${file.id}?download=true`);
 
         row.innerHTML = `
-          <div class="file-row-left">
+          <div class="file-row-left" style="cursor:pointer;" title="Click to inspect preview">
             <span class="file-icon">${isDir ? '📁' : '📄'}</span>
             <div class="file-info">
               <span class="file-name" title="${escapeHtml(file.path || file.name)}">${escapeHtml(file.name)}</span>
               <span class="file-meta">${isDir ? escapeHtml(file.path) + ' • ' : ''}${formatBytes(file.size)}</span>
             </div>
           </div>
-          <button type="button" class="btn-secondary sm btn-download-file">Download</button>
+          <div class="file-row-actions">
+            <button type="button" class="btn-ghost sm btn-inspect-file" title="Inspect / preview without downloading">👁️ Inspect</button>
+            <button type="button" class="btn-secondary sm btn-download-file">Download</button>
+          </div>
         `;
+
+        row.querySelector('.file-row-left').onclick = () => {
+          openFileInspector(file, drop.code, e2eeKey);
+        };
+
+        row.querySelector('.btn-inspect-file').onclick = () => {
+          openFileInspector(file, drop.code, e2eeKey);
+        };
 
         row.querySelector('.btn-download-file').onclick = async (e) => {
           const btn = e.currentTarget;
@@ -1567,31 +1614,56 @@
       });
     }
 
-    // Delete Drop From Server button on Receiver Vault
+    // Delete Drop From Server button: ONLY visible and usable by the Drop Creator (Sender)
     const btnDeleteVault = document.getElementById('btn-delete-vault-drop');
+    const isSender = isSenderOfDrop(drop.code);
+
     if (btnDeleteVault) {
-      btnDeleteVault.onclick = async () => {
-        if (confirm(`Permanently delete and burn drop #${drop.code} from server?`)) {
-          btnDeleteVault.disabled = true;
-          btnDeleteVault.textContent = 'Deleting...';
-          try {
-            await fetch(getApiUrl(`/api/drop/${drop.code}`), { method: 'DELETE' });
-            updateVaultHistoryStatus(drop.code, 'burned');
-            showToast(`Drop #${drop.code} permanently deleted 🗑️`);
-            switchTab('receive');
-          } catch (err) {
-            showToast('Failed to delete drop');
-          } finally {
-            btnDeleteVault.disabled = false;
-            btnDeleteVault.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> Delete From Server';
+      if (isSender) {
+        btnDeleteVault.classList.remove('hidden');
+        btnDeleteVault.onclick = async () => {
+          if (confirm(`Permanently delete and burn drop #${drop.code} from server?`)) {
+            btnDeleteVault.disabled = true;
+            btnDeleteVault.textContent = 'Deleting...';
+            try {
+              await fetch(getApiUrl(`/api/drop/${drop.code}`), { method: 'DELETE' });
+              localStorage.removeItem(SENDER_STORAGE_KEY);
+              activeDropData = null;
+              updateVaultHistoryStatus(drop.code, 'burned');
+              showToast(`Drop #${drop.code} permanently deleted 🗑️`);
+              switchTab('send');
+            } catch (err) {
+              showToast('Failed to delete drop');
+            } finally {
+              btnDeleteVault.disabled = false;
+              btnDeleteVault.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> Delete From Server';
+            }
           }
-        }
-      };
+        };
+      } else {
+        btnDeleteVault.classList.add('hidden');
+      }
     }
 
     btnReceiveAnother.onclick = () => {
       switchTab('receive');
     };
+  }
+
+  function isSenderOfDrop(code) {
+    if (!code) return false;
+    if (activeDropData && activeDropData.code === code) return true;
+    try {
+      const activeSaved = localStorage.getItem(SENDER_STORAGE_KEY);
+      if (activeSaved) {
+        const parsed = JSON.parse(activeSaved);
+        if (parsed && parsed.code === code) return true;
+      }
+      const history = getVaultHistory();
+      const item = history.find(h => h.code === code);
+      if (item && item.direction === 'sent') return true;
+    } catch (e) {}
+    return false;
   }
 
   // --- DEDICATED VAULT HISTORY SYSTEM ---
@@ -1891,7 +1963,11 @@
   }
 
   function checkDirectUrlOrActiveDrop() {
-    const path = window.location.pathname.replace(/^\//, '').toUpperCase();
+    let path = window.location.pathname.replace(/^\//, '').toUpperCase();
+    if (!path || path.length !== 4) {
+      const hashMatch = window.location.hash.match(/^#([A-Za-z0-9]{4})/);
+      if (hashMatch) path = hashMatch[1].toUpperCase();
+    }
     if (path.length === 4 && /^[A-Z0-9]{4}$/.test(path)) {
       switchTab('receive');
       path.split('').forEach((c, i) => { if (pinCells[i]) pinCells[i].value = c; });
@@ -1994,6 +2070,326 @@
     }, 'image/jpeg', 0.9);
   }
 
+  // --- UNIVERSAL FILE & IMAGE INSPECTOR ENGINE ---
+  let activeInspectorObjectUrl = null;
+  let activeInspectorText = null;
+  let activeInspectorBlob = null;
+  let activeInspectorFile = null;
+  let currentZoom = 1;
+  let isDraggingImg = false;
+  let startX = 0, startY = 0, currentTranslateX = 0, currentTranslateY = 0;
+
+  function setupFileInspector() {
+    const inspectorModal = document.getElementById('inspector-modal');
+    const inspectorModalOverlay = document.getElementById('inspector-modal-overlay');
+    const btnCloseInspector = document.getElementById('btn-close-inspector');
+    const btnInspectorCopy = document.getElementById('btn-inspector-copy');
+    const btnInspectorDownload = document.getElementById('btn-inspector-download');
+    const btnZoomIn = document.getElementById('btn-zoom-in');
+    const btnZoomOut = document.getElementById('btn-zoom-out');
+    const btnZoomReset = document.getElementById('btn-zoom-reset');
+
+    if (btnCloseInspector) btnCloseInspector.addEventListener('click', closeFileInspector);
+    if (inspectorModalOverlay) inspectorModalOverlay.addEventListener('click', closeFileInspector);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && inspectorModal && inspectorModal.classList.contains('show')) {
+        closeFileInspector();
+      }
+    });
+
+    if (btnZoomIn) {
+      btnZoomIn.addEventListener('click', () => adjustZoom(0.25));
+    }
+    if (btnZoomOut) {
+      btnZoomOut.addEventListener('click', () => adjustZoom(-0.25));
+    }
+    if (btnZoomReset) {
+      btnZoomReset.addEventListener('click', () => resetZoom());
+    }
+
+    if (btnInspectorCopy) {
+      btnInspectorCopy.addEventListener('click', async () => {
+        if (activeInspectorText) {
+          navigator.clipboard.writeText(activeInspectorText);
+          playChime('copy');
+          showToast('Content copied to clipboard! 📋');
+        } else if (activeInspectorBlob && activeInspectorBlob.type && activeInspectorBlob.type.startsWith('image/')) {
+          try {
+            if (navigator.clipboard && window.ClipboardItem) {
+              await navigator.clipboard.write([
+                new ClipboardItem({ [activeInspectorBlob.type]: activeInspectorBlob })
+              ]);
+              playChime('copy');
+              showToast('Image copied to clipboard! 🖼️');
+            } else {
+              showToast('Direct image clipboard copy not supported in this browser');
+            }
+          } catch (e) {
+            showToast('Could not copy image');
+          }
+        }
+      });
+    }
+
+    if (btnInspectorDownload) {
+      btnInspectorDownload.addEventListener('click', () => {
+        if (activeInspectorBlob && activeInspectorFile) {
+          downloadBlob(activeInspectorBlob, activeInspectorFile.name);
+        } else if (activeInspectorFile && activeInspectorFile.dropCode && activeInspectorFile.id) {
+          triggerDirectDownload(getApiUrl(`/api/file/${activeInspectorFile.dropCode}/${activeInspectorFile.id}?download=true`), activeInspectorFile.name);
+        }
+      });
+    }
+  }
+
+  function closeFileInspector() {
+    const inspectorModal = document.getElementById('inspector-modal');
+    if (inspectorModal) {
+      inspectorModal.classList.remove('show');
+      inspectorModal.setAttribute('aria-hidden', 'true');
+    }
+    if (activeInspectorObjectUrl) {
+      URL.revokeObjectURL(activeInspectorObjectUrl);
+      activeInspectorObjectUrl = null;
+    }
+    activeInspectorText = null;
+    activeInspectorBlob = null;
+    activeInspectorFile = null;
+    currentZoom = 1;
+    currentTranslateX = 0;
+    currentTranslateY = 0;
+  }
+
+  function adjustZoom(delta) {
+    currentZoom = Math.min(4, Math.max(0.25, currentZoom + delta));
+    applyImageTransform();
+  }
+
+  function resetZoom() {
+    currentZoom = 1;
+    currentTranslateX = 0;
+    currentTranslateY = 0;
+    applyImageTransform();
+  }
+
+  function applyImageTransform() {
+    const img = document.getElementById('inspector-display-img');
+    const zoomLevelEl = document.getElementById('inspector-zoom-level');
+    if (img) {
+      img.style.transform = `translate(${currentTranslateX}px, ${currentTranslateY}px) scale(${currentZoom})`;
+    }
+    if (zoomLevelEl) {
+      zoomLevelEl.textContent = `${Math.round(currentZoom * 100)}%`;
+    }
+  }
+
+  async function openFileInspector(file, dropCode = null, e2eeKey = null) {
+    const inspectorModal = document.getElementById('inspector-modal');
+    const inspectorFileIcon = document.getElementById('inspector-file-icon');
+    const inspectorFileName = document.getElementById('inspector-file-name');
+    const inspectorFileSize = document.getElementById('inspector-file-size');
+    const inspectorFileType = document.getElementById('inspector-file-type');
+    const inspectorDimBadge = document.getElementById('inspector-dim-badge');
+    const inspectorModalBody = document.getElementById('inspector-modal-body');
+    const inspectorImageControls = document.getElementById('inspector-image-controls');
+    const inspectorCodeStats = document.getElementById('inspector-code-stats');
+    const inspectorCopyLabel = document.getElementById('inspector-copy-label');
+
+    if (!inspectorModal) return;
+
+    closeFileInspector();
+    activeInspectorFile = Object.assign({}, file, { dropCode });
+
+    // Identify category & extension
+    const fileName = file.name || 'file';
+    const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+    let mimeType = file.type || '';
+    const isImage = mimeType.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext);
+    const isPdf = mimeType === 'application/pdf' || ext === 'pdf';
+    const isAudio = mimeType.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(ext);
+    const isVideo = mimeType.startsWith('video/') || ['mp4', 'webm', 'mov', 'mkv'].includes(ext);
+    const isCodeOrText = mimeType.startsWith('text/') || mimeType === 'application/json' ||
+      ['txt', 'js', 'ts', 'jsx', 'tsx', 'json', 'html', 'css', 'scss', 'py', 'md', 'csv', 'tsv', 'xml', 'svg', 'yml', 'yaml', 'sh', 'bash', 'sql', 'rs', 'go', 'c', 'cpp', 'h', 'java', 'kt', 'php', 'rb', 'log', 'env', 'toml', 'ini', 'conf', 'diff', 'patch'].includes(ext);
+
+    // Set Header Metadata
+    inspectorFileName.textContent = fileName;
+    inspectorFileSize.textContent = formatBytes(file.size || 0);
+    inspectorFileType.textContent = ext ? ext.toUpperCase() : (mimeType || 'FILE');
+    inspectorDimBadge.classList.add('hidden');
+    inspectorImageControls.classList.add('hidden');
+    inspectorCodeStats.classList.add('hidden');
+
+    if (isImage) {
+      inspectorFileIcon.textContent = '🖼️';
+      inspectorCopyLabel.textContent = 'Copy Image';
+    } else if (isPdf) {
+      inspectorFileIcon.textContent = '📕';
+      inspectorCopyLabel.textContent = 'Copy Link';
+    } else if (isAudio) {
+      inspectorFileIcon.textContent = '🎵';
+      inspectorCopyLabel.textContent = 'Copy';
+    } else if (isVideo) {
+      inspectorFileIcon.textContent = '🎬';
+      inspectorCopyLabel.textContent = 'Copy';
+    } else if (isCodeOrText) {
+      inspectorFileIcon.textContent = '📄';
+      inspectorCopyLabel.textContent = 'Copy Text';
+    } else {
+      inspectorFileIcon.textContent = '📦';
+      inspectorCopyLabel.textContent = 'Copy';
+    }
+
+    // Show initial spinner
+    inspectorModalBody.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px;">
+        <div class="upload-spinner" style="width:36px;height:36px;border-width:3px;"></div>
+        <span style="font-size:0.88rem;color:#94a3b8;">Loading preview...</span>
+      </div>
+    `;
+
+    inspectorModal.classList.add('show');
+    inspectorModal.setAttribute('aria-hidden', 'false');
+
+    try {
+      let blob = null;
+
+      // 1. Get Blob: Local File vs Remote Server Drop
+      if (file instanceof File || file instanceof Blob) {
+        blob = file;
+      } else if (file.fileHandle instanceof File || file.fileHandle instanceof Blob) {
+        blob = file.fileHandle;
+      } else if (dropCode && file.id) {
+        const fileUrl = getApiUrl(`/api/file/${dropCode}/${file.id}`);
+        const res = await fetch(fileUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        if (e2eeKey) {
+          const cipherBuf = await res.arrayBuffer();
+          const plainBuf = await CryptoEngine.decryptBytes(cipherBuf, e2eeKey);
+          blob = new Blob([plainBuf], { type: mimeType || 'application/octet-stream' });
+        } else {
+          blob = await res.blob();
+        }
+      }
+
+      if (!blob) throw new Error('File data could not be loaded');
+      activeInspectorBlob = blob;
+
+      // 2. Render Viewer based on Category
+      if (isImage) {
+        activeInspectorObjectUrl = URL.createObjectURL(blob);
+        inspectorModalBody.innerHTML = `
+          <div class="inspector-image-container" id="inspector-img-container">
+            <img src="${activeInspectorObjectUrl}" class="inspector-display-img" id="inspector-display-img" alt="${escapeHtml(fileName)}" />
+          </div>
+        `;
+
+        const displayImg = document.getElementById('inspector-display-img');
+        const imgContainer = document.getElementById('inspector-img-container');
+
+        displayImg.onload = () => {
+          inspectorDimBadge.textContent = `${displayImg.naturalWidth} × ${displayImg.naturalHeight}`;
+          inspectorDimBadge.classList.remove('hidden');
+        };
+
+        inspectorImageControls.classList.remove('hidden');
+        resetZoom();
+
+        // Mouse Wheel Zoom
+        imgContainer.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const delta = e.deltaY < 0 ? 0.15 : -0.15;
+          adjustZoom(delta);
+        }, { passive: false });
+
+        // Pan/Drag
+        imgContainer.addEventListener('mousedown', (e) => {
+          if (currentZoom > 1) {
+            isDraggingImg = true;
+            startX = e.clientX - currentTranslateX;
+            startY = e.clientY - currentTranslateY;
+          }
+        });
+        window.addEventListener('mousemove', (e) => {
+          if (isDraggingImg) {
+            currentTranslateX = e.clientX - startX;
+            currentTranslateY = e.clientY - startY;
+            applyImageTransform();
+          }
+        });
+        window.addEventListener('mouseup', () => { isDraggingImg = false; });
+
+      } else if (isCodeOrText) {
+        const text = await blob.text();
+        activeInspectorText = text;
+        const lines = text.split('\n');
+
+        const lineNumbersHtml = lines.map((_, i) => `<div>${i + 1}</div>`).join('');
+        const escapedContent = escapeHtml(text);
+
+        inspectorModalBody.innerHTML = `
+          <div class="inspector-code-wrapper">
+            <div class="inspector-line-numbers">${lineNumbersHtml}</div>
+            <pre class="inspector-code-content"><code>${escapedContent}</code></pre>
+          </div>
+        `;
+
+        const inspectorLineCount = document.getElementById('inspector-line-count');
+        const inspectorCharCount = document.getElementById('inspector-char-count');
+        if (inspectorLineCount) inspectorLineCount.textContent = `${lines.length} lines`;
+        if (inspectorCharCount) inspectorCharCount.textContent = `${text.length} chars`;
+        inspectorCodeStats.classList.remove('hidden');
+
+      } else if (isPdf) {
+        activeInspectorObjectUrl = URL.createObjectURL(blob);
+        inspectorModalBody.innerHTML = `
+          <iframe src="${activeInspectorObjectUrl}#toolbar=1" class="inspector-pdf-frame" title="PDF Preview"></iframe>
+        `;
+
+      } else if (isAudio) {
+        activeInspectorObjectUrl = URL.createObjectURL(blob);
+        inspectorModalBody.innerHTML = `
+          <div class="inspector-media-box">
+            <span style="font-size:3rem;">🎵</span>
+            <span style="font-weight:600;color:#fff;">${escapeHtml(fileName)}</span>
+            <audio controls autoplay class="inspector-audio-player" src="${activeInspectorObjectUrl}"></audio>
+          </div>
+        `;
+
+      } else if (isVideo) {
+        activeInspectorObjectUrl = URL.createObjectURL(blob);
+        inspectorModalBody.innerHTML = `
+          <div class="inspector-media-box">
+            <video controls autoplay playsinline class="inspector-video-player" src="${activeInspectorObjectUrl}"></video>
+          </div>
+        `;
+
+      } else {
+        inspectorModalBody.innerHTML = `
+          <div class="inspector-binary-card">
+            <span class="inspector-binary-icon">📦</span>
+            <span class="inspector-binary-title">${escapeHtml(fileName)}</span>
+            <span class="inspector-binary-desc">
+              Binary File (${formatBytes(file.size || 0)})<br>
+              Direct in-browser inspection is not supported for this file format.<br>
+              Click <strong>Save</strong> at the top right to download.
+            </span>
+          </div>
+        `;
+      }
+
+    } catch (err) {
+      inspectorModalBody.innerHTML = `
+        <div style="padding:32px;text-align:center;color:#f87171;">
+          <span style="font-size:2.5rem;display:block;margin-bottom:8px;">⚠️</span>
+          <strong>Failed to load preview</strong>
+          <p style="font-size:0.82rem;color:#94a3b8;margin-top:4px;">${escapeHtml(err.message || 'File could not be inspected')}</p>
+        </div>
+      `;
+    }
+  }
+
   // --- MOBILE BANNER & UPDATER ---
   function setupMobileAppBanner() {
     if (!mobileAppBanner) return;
@@ -2025,7 +2421,7 @@
     const modalBytesText = document.getElementById('modal-download-bytes-text');
     const modalSpeedText = document.getElementById('modal-download-speed-text');
 
-    const CURRENT_VERSION = window.APP_VERSION || (window.APP_CONFIG && window.APP_CONFIG.version) || '1.0.29';
+    const CURRENT_VERSION = window.APP_VERSION || (window.APP_CONFIG && window.APP_CONFIG.version) || '1.0.33';
     const footerVersionVal = document.getElementById('footer-version-val');
     if (footerVersionVal) footerVersionVal.textContent = CURRENT_VERSION;
 
@@ -2098,6 +2494,103 @@
     }
 
     setTimeout(() => checkVersion(false), 2000);
+  }
+
+  // --- ABOUT APP & WHAT'S NEW MODAL SYSTEM ---
+  function setupInfoModal() {
+    const btnOpenInfo = document.getElementById('btn-open-info');
+    const infoModal = document.getElementById('info-modal');
+    const infoModalOverlay = document.getElementById('info-modal-overlay');
+    const btnCloseInfo = document.getElementById('btn-close-info');
+    const tabInfoAbout = document.getElementById('tab-info-about');
+    const tabInfoChangelog = document.getElementById('tab-info-changelog');
+    const infoTabAbout = document.getElementById('info-tab-about');
+    const infoTabChangelog = document.getElementById('info-tab-changelog');
+    const changelogTimelineList = document.getElementById('changelog-timeline-list');
+    const btnCheckUpdate = document.getElementById('btn-check-update');
+
+    if (btnOpenInfo) {
+      btnOpenInfo.addEventListener('click', () => openInfoModal('about'));
+    }
+
+    // Clicking footer version pill opens What's New changelog
+    if (btnCheckUpdate) {
+      btnCheckUpdate.addEventListener('click', (e) => {
+        e.preventDefault();
+        openInfoModal('changelog');
+      });
+    }
+
+    if (btnCloseInfo) btnCloseInfo.addEventListener('click', closeInfoModal);
+    if (infoModalOverlay) infoModalOverlay.addEventListener('click', closeInfoModal);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && infoModal && infoModal.classList.contains('show')) {
+        closeInfoModal();
+      }
+    });
+
+    if (tabInfoAbout && tabInfoChangelog) {
+      tabInfoAbout.addEventListener('click', () => switchInfoTab('about'));
+      tabInfoChangelog.addEventListener('click', () => switchInfoTab('changelog'));
+    }
+
+    renderChangelogTimeline();
+
+    function openInfoModal(initialTab = 'about') {
+      if (!infoModal) return;
+      switchInfoTab(initialTab);
+      infoModal.classList.add('show');
+      infoModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeInfoModal() {
+      if (!infoModal) return;
+      infoModal.classList.remove('show');
+      infoModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function switchInfoTab(tabName) {
+      if (tabName === 'about') {
+        if (tabInfoAbout) tabInfoAbout.classList.add('active');
+        if (tabInfoChangelog) tabInfoChangelog.classList.remove('active');
+        if (infoTabAbout) infoTabAbout.classList.add('active');
+        if (infoTabChangelog) infoTabChangelog.classList.remove('active');
+      } else {
+        if (tabInfoAbout) tabInfoAbout.classList.remove('active');
+        if (tabInfoChangelog) tabInfoChangelog.classList.add('active');
+        if (infoTabAbout) infoTabAbout.classList.remove('active');
+        if (infoTabChangelog) infoTabChangelog.classList.add('active');
+      }
+    }
+
+    function renderChangelogTimeline() {
+      if (!changelogTimelineList) return;
+      const history = window.APP_CHANGELOG || [];
+      if (!history.length) {
+        changelogTimelineList.innerHTML = '<p class="text-muted" style="text-align:center; padding: 20px;">No changelog entries found.</p>';
+        return;
+      }
+
+      changelogTimelineList.innerHTML = history.map((item, idx) => {
+        const isLatest = idx === 0 || item.isLatest;
+        const bullets = (item.highlights || []).map(h => `<li>${escapeHtml(h)}</li>`).join('');
+        return `
+          <div class="changelog-card ${isLatest ? 'latest-version' : ''}">
+            <div class="changelog-card-header">
+              <div class="changelog-ver-wrap">
+                <span class="changelog-ver-pill">v${escapeHtml(item.version)}</span>
+                ${item.badge ? `<span class="changelog-tag">${escapeHtml(item.badge)}</span>` : ''}
+              </div>
+              <span class="changelog-date">${escapeHtml(item.date || '')}</span>
+            </div>
+            <ul class="changelog-list">
+              ${bullets}
+            </ul>
+          </div>
+        `;
+      }).join('');
+    }
   }
 
   // Run on DOM ready

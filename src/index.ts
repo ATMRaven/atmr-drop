@@ -223,10 +223,10 @@ export default {
           ghPage = ghData.html_url || '';
         }
 
-        const effectiveVersion = kvMeta?.version || ghTag || '1.0.29';
+        const effectiveVersion = kvMeta?.version || ghTag || '1.0.34';
         let cleanNotes = ghNotes;
         if (!cleanNotes || cleanNotes.includes('The Daily Drop') || cleanNotes.includes('Published by')) {
-          cleanNotes = '• Android System Share Sheet target: Send files directly from Gallery or File Manager in 1 tap\n• Integrated Camera QR Code Scanner with instant PIN detection\n• WebRTC P2P Direct Local Transfer ("Zero Cloud" high-speed mode)\n• Zero-Knowledge E2EE (AES-256-GCM) with URL hash fragment cryptography\n• Dedicated Vault / History screen with live countdowns & instant revocation\n• Folder & Directory recursive hierarchy uploads & ZIP bundling\n• 4-Character alphanumeric PIN with 1.68M combinations & seamless paste auto-fetch';
+          cleanNotes = '• Remapped & elevated upload quick-actions bar: prominent Upload Folder & Take Photo buttons\n• Sender-Only Deletion security: drop receivers can no longer delete drops; only creators retain burn access\n• Universal in-browser file & image inspector lightbox with full-res zoom/pan and code line numbers\n• Dedicated Help & System Info (? button) modal with complete feature guide and dynamic changelog';
         }
 
         return jsonResponse({
@@ -241,12 +241,12 @@ export default {
       } catch (e) {}
 
       return jsonResponse({
-        version: '1.0.29',
+        version: '1.0.34',
         downloadUrl: '/api/apk/latest',
         fallbackUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
         releasePage: 'https://github.com/ATMRaven/atmr-drop/releases/latest',
         mandatory: false,
-        releaseNotes: '• Android System Share Sheet target\n• Camera QR Code Scanner\n• WebRTC P2P Local LAN transfer\n• Zero-Knowledge E2EE (AES-256-GCM)\n• Vault / History screen\n• Folder & Directory uploads\n• 4-Character alphanumeric PIN with paste auto-fetch',
+        releaseNotes: '• Remapped & elevated upload quick-actions bar\n• Sender-Only Deletion security\n• Universal in-browser file & image inspector / lightbox\n• Help & System Info (? button) modal with feature guide and changelog',
       });
     }
 

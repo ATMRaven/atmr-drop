@@ -32,6 +32,9 @@
         </a>
       </div>
       <div class="header-right-actions">
+        <button type="button" id="btn-open-info" class="btn-info-toggle" title="About App & What's New" aria-label="About and What's New">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </button>
         <button type="button" id="btn-open-history" class="btn-vault-history-toggle" title="Open Vault History">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><path d="M10 12h4"></path></svg>
           <span>Vault</span>
@@ -115,7 +118,7 @@
         </div>
 
         <!-- File Upload Dropzone (Supports Files & Folders) -->
-        <div class="form-group">
+        <div class="form-group upload-studio-group">
           <div id="dropzone" class="clean-dropzone" role="button" tabindex="0">
             <input type="file" id="file-input" class="hidden-input" multiple>
             <input type="file" id="folder-input" class="hidden-input" webkitdirectory directory multiple>
@@ -124,22 +127,26 @@
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
               </div>
               <div class="dropzone-text">
-                <span class="dropzone-title">Drop files or folders here</span>
-                <span class="dropzone-sub">Images, videos, folders &amp; large files up to 10 GB</span>
+                <span class="dropzone-title">Drop files here or tap to browse</span>
+                <span class="dropzone-sub">Photos, videos, folders &amp; large files up to 10 GB</span>
               </div>
-            </div>
-            <div class="dropzone-tools">
-              <button type="button" id="btn-folder-snap" class="btn-dropzone-tool" title="Upload complete folder / directory">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-              </button>
-              <button type="button" id="btn-camera" class="btn-dropzone-tool" title="Take photo with camera">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              </button>
             </div>
           </div>
 
+          <!-- Prominent Action Bar for Folder & Camera Quick Snap -->
+          <div class="upload-quick-actions">
+            <button type="button" id="btn-folder-snap" class="upload-action-btn" title="Upload entire folder / directory">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              <span>Upload Folder</span>
+            </button>
+            <button type="button" id="btn-camera" class="upload-action-btn" title="Capture photo with camera">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              <span>Take Photo</span>
+            </button>
+          </div>
+
           <!-- Staged files chips -->
-          <div id="staged-files-list" class="staged-chips-container hidden"></div>
+          <div id="staged-files-list" class="staged-chips-list hidden"></div>
         </div>
 
         <!-- Options Bar -->
@@ -435,7 +442,7 @@
         </div>
 
         <div class="action-footer vault-actions-footer">
-          <button type="button" id="btn-delete-vault-drop" class="btn-danger-action">
+          <button type="button" id="btn-delete-vault-drop" class="btn-danger-action hidden">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
             Delete From Server
           </button>
@@ -452,7 +459,7 @@
     <footer class="app-footer">
       <span>drop.atmr.workers.dev</span>
       <span class="footer-dot">•</span>
-      <button type="button" id="btn-check-update" class="footer-version-btn" title="Check for updates">v<span id="footer-version-val">1.0.29</span></button>
+      <button type="button" id="btn-check-update" class="footer-version-btn" title="Check for updates">v<span id="footer-version-val">1.0.34</span></button>
       <span class="footer-dot">•</span>
       <span>Encrypted P2P &amp; Edge</span>
     </footer>
@@ -532,6 +539,184 @@
 
       <div class="modal-footer history-footer">
         <button type="button" id="btn-clear-history" class="btn-ghost text-danger sm">Clear Local History</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Universal File & Image Inspector Modal -->
+  <div id="inspector-modal" class="clean-modal inspector-modal" aria-hidden="true">
+    <div class="modal-overlay" id="inspector-modal-overlay"></div>
+    <div class="modal-card inspector-modal-card">
+      <div class="modal-header inspector-modal-header">
+        <div class="inspector-title-wrap">
+          <span id="inspector-file-icon" class="inspector-file-icon">📄</span>
+          <div class="inspector-meta-info">
+            <h3 class="modal-heading inspector-file-name" id="inspector-file-name">filename.ext</h3>
+            <div class="inspector-badge-row">
+              <span id="inspector-file-size" class="badge-pill sm-pill">0 KB</span>
+              <span id="inspector-file-type" class="badge-pill sm-pill secondary-pill">Type</span>
+              <span id="inspector-dim-badge" class="badge-pill sm-pill gold-pill hidden">0 x 0</span>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-header-actions">
+          <button type="button" id="btn-inspector-copy" class="btn-ghost sm btn-inspector-action" title="Copy Content or Image">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            <span id="inspector-copy-label">Copy</span>
+          </button>
+          <button type="button" id="btn-inspector-download" class="btn-primary sm btn-inspector-action" title="Download File">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Save</span>
+          </button>
+          <button type="button" id="btn-close-inspector" class="btn-modal-close" title="Close inspector">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body inspector-modal-body" id="inspector-modal-body">
+        <!-- Content injected dynamically -->
+      </div>
+      <div class="inspector-footer-bar" id="inspector-footer-bar">
+        <div id="inspector-image-controls" class="inspector-toolbar-group hidden">
+          <button type="button" id="btn-zoom-out" class="btn-toolbar" title="Zoom Out">-</button>
+          <span id="inspector-zoom-level" class="toolbar-text">100%</span>
+          <button type="button" id="btn-zoom-in" class="btn-toolbar" title="Zoom In">+</button>
+          <button type="button" id="btn-zoom-reset" class="btn-toolbar" title="Reset Zoom">Fit</button>
+        </div>
+        <div id="inspector-code-stats" class="inspector-toolbar-group hidden">
+          <span id="inspector-line-count" class="toolbar-text">0 lines</span>
+          <span class="footer-dot">•</span>
+          <span id="inspector-char-count" class="toolbar-text">0 chars</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- About App & What's New Info Modal -->
+  <div id="info-modal" class="clean-modal" aria-hidden="true">
+    <div class="modal-overlay" id="info-modal-overlay"></div>
+    <div class="modal-card info-modal-card">
+      <div class="modal-header info-modal-header">
+        <div class="info-header-title-wrap">
+          <div class="info-brand-pill">
+            <span class="info-brand-logo">drop</span>
+            <span class="info-brand-dot"></span>
+          </div>
+          <span class="info-modal-title">System &amp; Features</span>
+        </div>
+        <button type="button" id="btn-close-info" class="btn-modal-close" title="Close" aria-label="Close">&times;</button>
+      </div>
+
+      <!-- Segmented Pill Switcher between 'About App' and 'What\'s New' -->
+      <div class="info-segmented-tabs">
+        <button type="button" id="tab-info-about" class="info-pill-btn active" data-tab="about">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          <span>About App</span>
+        </button>
+        <button type="button" id="tab-info-changelog" class="info-pill-btn" data-tab="changelog">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+          <span>What's New</span>
+          <span class="changelog-badge-new">v1.0.34</span>
+        </button>
+      </div>
+
+      <div class="modal-body info-modal-body">
+        <!-- TAB 1: About App (All Functionalities) -->
+        <div id="info-tab-about" class="info-tab-content active">
+          <div class="about-hero-card">
+            <h4 class="about-hero-title">The Frictionless File &amp; Text Drop</h4>
+            <p class="about-hero-desc">
+              High-speed, ephemeral, zero-knowledge encrypted sharing between phones, laptops, and terminal agents without logins or clutter.
+            </p>
+          </div>
+
+          <div class="features-grid">
+            <div class="feature-card">
+              <div class="feature-icon" style="color: #38bdf8; background: rgba(56, 189, 248, 0.12);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              </div>
+              <div class="feature-detail">
+                <h5>Instant 4-Char PIN &amp; Vanity URLs</h5>
+                <p>Drop anything and receive an easy 4-character code (e.g. <code>#ABCD</code>) with instant QR codes and direct links (<code>/ABCD</code>).</p>
+              </div>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon" style="color: #10b981; background: rgba(16, 185, 129, 0.12);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </div>
+              <div class="feature-detail">
+                <h5>In-Browser Inspector &amp; Lightbox</h5>
+                <p>Inspect full-resolution photos with zoom/pan, preview syntax-highlighted code with line numbers, and stream media without downloading.</p>
+              </div>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon" style="color: #8b5cf6; background: rgba(139, 92, 246, 0.12);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
+              </div>
+              <div class="feature-detail">
+                <h5>Zero-Knowledge Client E2EE</h5>
+                <p>Military-grade AES-256-GCM encryption in your browser. Keys stay in URL fragments (<code>#key=...</code>) and never touch server storage.</p>
+              </div>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon" style="color: #ec4899; background: rgba(236, 72, 153, 0.12);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+              </div>
+              <div class="feature-detail">
+                <h5>WebRTC Direct LAN P2P Mode</h5>
+                <p>Direct peer-to-peer device transfer bypassing the cloud for ultra-fast local network transfers up to 10 GB.</p>
+              </div>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon" style="color: #f59e0b; background: rgba(245, 158, 11, 0.12);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              </div>
+              <div class="feature-detail">
+                <h5>Folder Hierarchy &amp; ZIP Bundler</h5>
+                <p>Drag whole directories with subfolders intact. Receivers can browse hierarchy or grab everything with one-click ZIP download.</p>
+              </div>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon" style="color: #06b6d4; background: rgba(6, 182, 212, 0.12);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+              </div>
+              <div class="feature-detail">
+                <h5>Native Android App &amp; Share Sheet</h5>
+                <p>Share directly from Android Gallery or Files apps, live camera QR viewfinder, and self-updating APK architecture.</p>
+              </div>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon" style="color: #ef4444; background: rgba(239, 68, 68, 0.12);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </div>
+              <div class="feature-detail">
+                <h5>Sender-Only Deletion &amp; Auto-Expiry</h5>
+                <p>Custom TTLs (5m to 24h) and burn-after-reading. Only the original sender has permission to delete or revoke drops.</p>
+              </div>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon" style="color: #6366f1; background: rgba(99, 102, 241, 0.12);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+              </div>
+              <div class="feature-detail">
+                <h5>AI Agent &amp; Terminal MCP Tools</h5>
+                <p>Automated Model Context Protocol (MCP) server and TypeScript SDK (<code>atmr-drop-client</code>) for agent workflows.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: What's New (Changelog) -->
+        <div id="info-tab-changelog" class="info-tab-content">
+          <div class="changelog-timeline" id="changelog-timeline-list">
+            <!-- Rendered dynamically from window.APP_CHANGELOG -->
+          </div>
+        </div>
       </div>
     </div>
   </div>
