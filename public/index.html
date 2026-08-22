@@ -94,6 +94,9 @@
           </div>
           <div class="active-banner-actions">
             <button type="button" id="btn-banner-view" class="btn-banner-view">View Drop ↗</button>
+            <button type="button" id="btn-banner-delete" class="btn-banner-delete" title="Delete Drop">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
             <button type="button" id="btn-banner-dismiss" class="btn-banner-dismiss" title="Dismiss banner">&times;</button>
           </div>
         </div>
@@ -342,8 +345,11 @@
         </div>
 
         <div class="share-actions-row">
-          <button id="btn-cancel-drop" class="btn-ghost text-danger">Revoke &amp; Delete</button>
-          <button id="btn-new-send" class="btn-secondary">New Drop</button>
+          <button type="button" id="btn-cancel-drop" class="btn-danger-action">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            Delete Drop
+          </button>
+          <button type="button" id="btn-new-send" class="btn-secondary">New Drop</button>
         </div>
 
       </section>
@@ -428,8 +434,12 @@
           <div id="received-files-list" class="file-rows-list"></div>
         </div>
 
-        <div class="action-footer">
-          <button id="btn-receive-another" class="btn-secondary full-width">
+        <div class="action-footer vault-actions-footer">
+          <button type="button" id="btn-delete-vault-drop" class="btn-danger-action">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            Delete From Server
+          </button>
+          <button type="button" id="btn-receive-another" class="btn-secondary">
             Done
           </button>
         </div>
@@ -442,7 +452,7 @@
     <footer class="app-footer">
       <span>drop.atmr.workers.dev</span>
       <span class="footer-dot">•</span>
-      <button type="button" id="btn-check-update" class="footer-version-btn" title="Check for updates">v<span id="footer-version-val">1.0.28</span></button>
+      <button type="button" id="btn-check-update" class="footer-version-btn" title="Check for updates">v<span id="footer-version-val">1.0.29</span></button>
       <span class="footer-dot">•</span>
       <span>Encrypted P2P &amp; Edge</span>
     </footer>

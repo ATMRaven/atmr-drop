@@ -223,7 +223,7 @@ export default {
           ghPage = ghData.html_url || '';
         }
 
-        const effectiveVersion = kvMeta?.version || ghTag || '1.0.28';
+        const effectiveVersion = kvMeta?.version || ghTag || '1.0.29';
         let cleanNotes = ghNotes;
         if (!cleanNotes || cleanNotes.includes('The Daily Drop') || cleanNotes.includes('Published by')) {
           cleanNotes = '• Android System Share Sheet target: Send files directly from Gallery or File Manager in 1 tap\n• Integrated Camera QR Code Scanner with instant PIN detection\n• WebRTC P2P Direct Local Transfer ("Zero Cloud" high-speed mode)\n• Zero-Knowledge E2EE (AES-256-GCM) with URL hash fragment cryptography\n• Dedicated Vault / History screen with live countdowns & instant revocation\n• Folder & Directory recursive hierarchy uploads & ZIP bundling\n• 4-Character alphanumeric PIN with 1.68M combinations & seamless paste auto-fetch';
@@ -241,7 +241,7 @@ export default {
       } catch (e) {}
 
       return jsonResponse({
-        version: '1.0.28',
+        version: '1.0.29',
         downloadUrl: '/api/apk/latest',
         fallbackUrl: 'https://github.com/ATMRaven/atmr-drop/releases/latest/download/atmr-drop.apk',
         releasePage: 'https://github.com/ATMRaven/atmr-drop/releases/latest',

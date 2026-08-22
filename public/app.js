@@ -410,6 +410,9 @@
     setupNativeSendIntent();
     checkDirectUrlOrActiveDrop();
     updateHistoryBadge();
+    const footerVersionVal = document.getElementById('footer-version-val');
+    const CURRENT_VERSION = window.APP_VERSION || (window.APP_CONFIG && window.APP_CONFIG.version) || '1.0.29';
+    if (footerVersionVal) footerVersionVal.textContent = CURRENT_VERSION;
   }
 
   // --- TABS & VIEWS ---
@@ -1555,6 +1558,37 @@
       receivedFilesContainer.classList.add('hidden');
     }
 
+    // Start Countdown on Receiver Vault
+    if (receiveExpiryText) {
+      startCountdown(drop.expiresAt, receiveExpiryText, () => {
+        receiveExpiryText.textContent = 'Expired';
+        receiveExpiryText.style.color = '#ef4444';
+        showToast(`Drop #${drop.code} has expired`);
+      });
+    }
+
+    // Delete Drop From Server button on Receiver Vault
+    const btnDeleteVault = document.getElementById('btn-delete-vault-drop');
+    if (btnDeleteVault) {
+      btnDeleteVault.onclick = async () => {
+        if (confirm(`Permanently delete and burn drop #${drop.code} from server?`)) {
+          btnDeleteVault.disabled = true;
+          btnDeleteVault.textContent = 'Deleting...';
+          try {
+            await fetch(getApiUrl(`/api/drop/${drop.code}`), { method: 'DELETE' });
+            updateVaultHistoryStatus(drop.code, 'burned');
+            showToast(`Drop #${drop.code} permanently deleted 🗑️`);
+            switchTab('receive');
+          } catch (err) {
+            showToast('Failed to delete drop');
+          } finally {
+            btnDeleteVault.disabled = false;
+            btnDeleteVault.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> Delete From Server';
+          }
+        }
+      };
+    }
+
     btnReceiveAnother.onclick = () => {
       switchTab('receive');
     };
@@ -1767,19 +1801,46 @@
   }
 
   function startCountdown(expiresAt, element, onExpire) {
-    if (countdownTimer) clearInterval(countdownTimer);
-    function update() {
-      const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
-      const m = Math.floor(remaining / 60);
-      const s = remaining % 60;
-      element.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
-      if (remaining <= 0) {
-        clearInterval(countdownTimer);
-        if (onExpire) onExpire();
+    if (!element) return;
+    if (element._countdownInterval) {
+      clearInterval(element._countdownInterval);
+      element._countdownInterval = null;
+    }
+
+    if (!expiresAt) {
+      element.textContent = '--:--';
+      return;
+    }
+
+    const exp = typeof expiresAt === 'string' ? parseInt(expiresAt, 10) : expiresAt;
+    const expMs = exp < 10000000000 ? exp * 1000 : exp;
+
+    function formatTime(remainingSec) {
+      if (remainingSec <= 0) return '00:00';
+      if (remainingSec >= 3600) {
+        const h = Math.floor(remainingSec / 3600);
+        const m = Math.floor((remainingSec % 3600) / 60);
+        const s = remainingSec % 60;
+        return `${h}h ${m < 10 ? '0' : ''}${m}m ${s < 10 ? '0' : ''}${s}s`;
+      }
+      const m = Math.floor(remainingSec / 60);
+      const s = remainingSec % 60;
+      return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function tick() {
+      const now = Date.now();
+      const remainingSec = Math.max(0, Math.floor((expMs - now) / 1000));
+      element.textContent = formatTime(remainingSec);
+      if (remainingSec <= 0) {
+        clearInterval(element._countdownInterval);
+        element._countdownInterval = null;
+        if (typeof onExpire === 'function') onExpire();
       }
     }
-    update();
-    countdownTimer = setInterval(update, 1000);
+
+    tick();
+    element._countdownInterval = setInterval(tick, 1000);
   }
 
   function updateActiveBanner() {
@@ -1790,11 +1851,35 @@
         if (drop && drop.expiresAt > Date.now()) {
           activeBannerPin.textContent = drop.code;
           activeDropBanner.classList.remove('hidden');
+
+          const activeBannerTime = document.getElementById('active-banner-time');
+          if (activeBannerTime) {
+            startCountdown(drop.expiresAt, activeBannerTime, () => {
+              activeDropBanner.classList.add('hidden');
+            });
+          }
+
           btnBannerView.onclick = () => {
             activeDropData = drop;
             renderShareScreen(drop);
             showView('share');
           };
+
+          const btnBannerDelete = document.getElementById('btn-banner-delete');
+          if (btnBannerDelete) {
+            btnBannerDelete.onclick = async (e) => {
+              e.stopPropagation();
+              if (confirm(`Delete active drop #${drop.code}?`)) {
+                await fetch(getApiUrl(`/api/drop/${drop.code}`), { method: 'DELETE' });
+                localStorage.removeItem(SENDER_STORAGE_KEY);
+                activeDropData = null;
+                activeDropBanner.classList.add('hidden');
+                updateVaultHistoryStatus(drop.code, 'burned');
+                showToast(`Drop #${drop.code} deleted`);
+              }
+            };
+          }
+
           btnBannerDismiss.onclick = () => {
             activeDropBanner.classList.add('hidden');
           };
@@ -1940,7 +2025,7 @@
     const modalBytesText = document.getElementById('modal-download-bytes-text');
     const modalSpeedText = document.getElementById('modal-download-speed-text');
 
-    const CURRENT_VERSION = (window.APP_CONFIG && window.APP_CONFIG.version) ? window.APP_CONFIG.version : '1.0.28';
+    const CURRENT_VERSION = window.APP_VERSION || (window.APP_CONFIG && window.APP_CONFIG.version) || '1.0.29';
     const footerVersionVal = document.getElementById('footer-version-val');
     if (footerVersionVal) footerVersionVal.textContent = CURRENT_VERSION;
 
