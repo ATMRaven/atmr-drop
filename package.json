@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Ultra-fast cross-device text, image, and file drop web app on Cloudflare Worker + KV + R2",
   "main": "src/index.ts",
+  "bin": {
+    "drop": "./bin/drop-cli.js"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
